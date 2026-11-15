@@ -1,0 +1,35 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      DB_NAME: flowpilot
+      JWT_SECRET: ${JWT_SECRET}
+      META_ENCRYPTION_KEY: ${META_ENCRYPTION_KEY}
+      ADMIN_EMAILS: ${ADMIN_EMAILS}
+      CORS_ORIGINS: "*"
+      META_GRAPH_VERSION: v25.0
+    depends_on:
+      - mongo
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:

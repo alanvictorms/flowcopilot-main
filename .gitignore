@@ -1,0 +1,20 @@
+# deps / builds
+node_modules/
+frontend/build/
+.venv/
+__pycache__/
+*.pyc
+
+# segredos / ambiente (NUNCA commitar)
+.env
+backend/.env
+frontend/.env
+*.key
+
+# helpers locais
+backend/run_local.py
+frontend/serve_local.py
+
+# os
+.DS_Store
+Thumbs.db

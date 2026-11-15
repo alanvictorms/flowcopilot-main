@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+body {
+    margin: 0;
+    font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.02em;
+}
+
+code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+    :root {
+        --background: 220 20% 96%;
+        --foreground: 240 10% 3.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 240 10% 3.9%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 240 10% 3.9%;
+        --primary: 83 78% 55%;
+        --primary-foreground: 240 10% 3.9%;
+        --secondary: 240 5% 96%;
+        --secondary-foreground: 240 10% 3.9%;
+        --muted: 240 5% 96%;
+        --muted-foreground: 240 4% 46%;
+        --accent: 240 5% 96%;
+        --accent-foreground: 240 10% 3.9%;
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 240 6% 90%;
+        --input: 240 6% 90%;
+        --ring: 83 78% 55%;
+        --success: 142 76% 45%;
+        --warning: 38 92% 50%;
+        --chart-1: 83 78% 55%;
+        --chart-2: 240 10% 20%;
+        --chart-3: 38 92% 55%;
+        --chart-4: 262 60% 55%;
+        --chart-5: 200 70% 45%;
+        --sidebar-bg: 0 0% 6%;
+        --sidebar-fg: 0 0% 98%;
+        --sidebar-muted: 240 4% 46%;
+        --sidebar-hover: 0 0% 12%;
+        --radius: 1rem;
+    }
+    .dark {
+        --background: 0 0% 6%;
+        --foreground: 0 0% 98%;
+        --card: 0 0% 10%;
+        --card-foreground: 0 0% 98%;
+        --popover: 0 0% 10%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 83 78% 55%;
+        --primary-foreground: 240 10% 3.9%;
+        --secondary: 240 4% 14%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 240 4% 14%;
+        --muted-foreground: 240 5% 64%;
+        --accent: 240 4% 14%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 0 62% 45%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 240 4% 16%;
+        --input: 240 4% 16%;
+        --ring: 83 78% 55%;
+        --success: 142 70% 50%;
+        --warning: 38 92% 55%;
+        --sidebar-bg: 0 0% 4%;
+        --sidebar-fg: 0 0% 98%;
+        --sidebar-muted: 240 5% 55%;
+        --sidebar-hover: 0 0% 10%;
+    }
+}
+
+@layer base {
+    * { @apply border-border; }
+    body { @apply bg-background text-foreground; }
+}
+
+@layer utilities {
+    .glass-panel {
+        @apply bg-background/70 backdrop-blur-xl border-b border-border/60;
+    }
+    .subtle-grid-bg {
+        background-image:
+            linear-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px),
+            linear-gradient(90deg, hsl(var(--border) / 0.35) 1px, transparent 1px);
+        background-size: 40px 40px;
+    }
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+    .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+}
+
+@layer base {
+    [data-debug-wrapper="true"] { display: contents !important; }
+    [data-debug-wrapper="true"] > * {
+        margin-left: inherit; margin-right: inherit; margin-top: inherit; margin-bottom: inherit;
+        padding-left: inherit; padding-right: inherit; padding-top: inherit; padding-bottom: inherit;
+        column-gap: inherit; row-gap: inherit; gap: inherit;
+        border-left-width: inherit; border-right-width: inherit;
+        border-top-width: inherit; border-bottom-width: inherit;
+    }
+}
+
+.rounded-4xl{
+    border-radius: 2.5rem;
+    padding-top: 1.5rem;
+}
+
+.pxtop {
+
+    padding: 0 1rem 0 1rem;
+}
+
+.py-1 {
+    margin: 0.25rem;
+}

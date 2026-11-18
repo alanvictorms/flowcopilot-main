@@ -167,6 +167,88 @@ function PublishCard({ j, busy, onPublish }) {
   );
 }
 
+const ACTION_LABEL = { copy: "Sugerir novas copies", criativos: "Sugerir novos criativos", estrutura: "Sugerir nova estrutura" };
+const KIND_LABEL = { copy: "Novas copies", criativos: "Novos criativos", estrutura: "Nova estrutura" };
+const brl = (v) => (v == null ? "—" : `R$ ${Number(v).toFixed(2)}`);
+
+function MonitorCard({ j, busy, onSuggest }) {
+  const [h, setH] = useState(null);
+  const [failed, setFailed] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true); setFailed("");
+    try { setH((await api.get(`/journey/${j.id}/health`)).data); }
+    catch (e) { setFailed(formatApiError(e.response?.data?.detail)); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, [j.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const k = h?.kpis || {};
+  const tiles = [
+    ["Investido (14d)", brl(k.spend)], ["CTR", `${k.ctr ?? 0}%`], ["Visitas", k.views ?? 0],
+    ["Leads", k.leads ?? 0], ["Conversão", `${k.conversion ?? 0}%`], ["CPL", brl(k.cpl)],
+  ];
+
+  return (
+    <Card className="p-5 rounded-2xl space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="text-sm font-semibold flex-1">Monitoramento</div>
+        <Button variant="outline" size="icon" className="rounded-full h-8 w-8" onClick={load} disabled={loading}>
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+        </Button>
+      </div>
+      {failed && <div className="text-xs text-red-600">{failed}</div>}
+      {h && (
+        <>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {tiles.map(([l, v]) => (
+              <div key={l} className="rounded-xl bg-muted/60 p-2.5">
+                <div className="text-[10px] text-muted-foreground">{l}</div>
+                <div className="text-sm font-semibold">{v}</div>
+              </div>
+            ))}
+          </div>
+          {h.alerts.length === 0 ? (
+            <div className="text-xs text-emerald-600 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Nenhum alerta. A campanha está saudável (ou ainda coletando dados).</div>
+          ) : (
+            <div className="space-y-2">
+              {h.alerts.map((a) => (
+                <div key={a.key} className={`rounded-xl border p-3 flex flex-col sm:flex-row sm:items-center gap-2 ${a.level === "high" ? "border-red-500/40 bg-red-500/5" : "border-yellow-500/40 bg-yellow-500/5"}`}>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{a.title}</div>
+                    <div className="text-xs text-muted-foreground">{a.message}</div>
+                  </div>
+                  <Button size="sm" variant="outline" className="rounded-full shrink-0" disabled={busy}
+                    onClick={() => onSuggest(a.action, `${a.title}. ${a.message}`)}>
+                    <Sparkles className="w-3.5 h-3.5 mr-1" /> {ACTION_LABEL[a.action]}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {Object.keys(ACTION_LABEL).map((kind) => (
+          <Button key={kind} size="sm" variant="ghost" className="rounded-full" disabled={busy} onClick={() => onSuggest(kind, "Pedido manual")}>
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Sparkles className="w-3.5 h-3.5 mr-1" />} {ACTION_LABEL[kind]}
+          </Button>
+        ))}
+      </div>
+      {(j.suggestions || []).map((s) => (
+        <div key={s.id} className="rounded-xl border p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Badge className="rounded-full">{KIND_LABEL[s.kind]}</Badge>
+            <span className="text-[10px] text-muted-foreground font-mono">{new Date(s.created_at).toLocaleString("pt-BR")}</span>
+          </div>
+          <Pretty value={s.data} />
+        </div>
+      ))}
+    </Card>
+  );
+}
+
 export default function Copilot() {
   const [meta, setMeta] = useState(null);
   const [list, setList] = useState([]);
@@ -336,6 +418,10 @@ export default function Copilot() {
                 {j.meta.status === "ACTIVE" ? "Pausar campanha" : "Ativar campanha"}
               </Button>
             </Card>
+          )}
+          {j.meta?.campaign_id && (
+            <MonitorCard j={j} busy={busy === "suggest"}
+              onSuggest={(kind, context) => run("suggest", () => api.post(`/journey/${j.id}/suggest`, { kind, context }, { timeout: 180000 }))} />
           )}
         </>
       )}

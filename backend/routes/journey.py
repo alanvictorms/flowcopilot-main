@@ -438,6 +438,117 @@ async def publish_campaign(jid: str, body: PublishIn, user: dict = Depends(get_c
     return await _advance(db, j, "aprovacao")
 
 
+# ── Monitoramento ────────────────────────────────────────────────
+INSIGHT_FIELDS = "ad_id,ad_name,impressions,clicks,spend,ctr,frequency"
+
+
+def _f(x) -> float:
+    try:
+        return float(x or 0)
+    except Exception:
+        return 0.0
+
+
+def build_alerts(recent: list, prior: list, views: int, leads: int, spend: float, cpl_target: float) -> list:
+    """Regras de alerta. recent = insights por anúncio (3d), prior = (14d)."""
+    alerts = []
+    prior_by = {r.get("ad_id"): r for r in prior}
+    for r in recent:
+        imp, ctr, freq = _f(r.get("impressions")), _f(r.get("ctr")), _f(r.get("frequency"))
+        p_ctr = _f(prior_by.get(r.get("ad_id"), {}).get("ctr"))
+        drop = (p_ctr - ctr) / p_ctr * 100 if p_ctr else 0
+        name = r.get("ad_name") or r.get("ad_id")
+        if imp >= 500 and (freq >= 3 or drop >= 30):
+            alerts.append({"key": f"fadiga:{r.get('ad_id')}", "level": "high", "action": "criativos",
+                           "title": f"Criativo cansado: {name}",
+                           "message": f"Frequência {freq:.1f} e CTR {'caiu ' + str(round(drop)) + '%' if drop >= 30 else 'estável'}. Hora de trocar o criativo."})
+        elif imp >= 1000 and ctr < 0.8:
+            alerts.append({"key": f"copy:{r.get('ad_id')}", "level": "medium", "action": "copy",
+                           "title": f"Copy com baixa atração: {name}",
+                           "message": f"CTR de {ctr:.2f}% (abaixo de 0,8%). Teste novas headlines e textos."})
+    conv = leads / views * 100 if views else 0
+    if views >= 50 and conv < 10:
+        alerts.append({"key": "conversao", "level": "high", "action": "estrutura",
+                       "title": "Conversão da página baixa",
+                       "message": f"{conv:.1f}% das visitas viram lead (meta ≥ 10%). Revise a estrutura da página e da oferta."})
+    if cpl_target and leads >= 3 and spend / leads > cpl_target * 1.3:
+        alerts.append({"key": "cpl", "level": "medium", "action": "estrutura",
+                       "title": "Custo por lead acima da meta",
+                       "message": f"CPL R$ {spend / leads:.2f} vs meta R$ {cpl_target:.2f}. Ajuste público ou oferta."})
+    if cpl_target and leads == 0 and spend > cpl_target * 3:
+        alerts.append({"key": "sem_leads", "level": "high", "action": "estrutura",
+                       "title": "Gastando sem gerar leads",
+                       "message": f"R$ {spend:.2f} investidos e nenhum lead. Revise a estrutura do funil."})
+    return alerts
+
+
+@router.get("/journey/{jid}/health")
+async def journey_health(jid: str, user: dict = Depends(get_current_user),
+                         db: AsyncIOMotorDatabase = Depends(get_db)):
+    j = await _get_journey(db, jid, user["id"])
+    cid = (j.get("meta") or {}).get("campaign_id")
+    if not cid:
+        raise HTTPException(status_code=400, detail="Campanha ainda não publicada")
+    client = await get_meta_client(user, db)
+    try:
+        q = {"level": "ad", "fields": INSIGHT_FIELDS, "limit": 200}
+        recent = (await client._request("GET", f"/{cid}/insights", params={**q, "date_preset": "last_3d"})).get("data", [])
+        prior = (await client._request("GET", f"/{cid}/insights", params={**q, "date_preset": "last_14d"})).get("data", [])
+    except MetaAPIError as e:
+        raise _meta_err(e)
+    leads = await db.leads.count_documents({"journey_id": jid})
+    views = j.get("landing_views", 0)
+    spend = sum(_f(r.get("spend")) for r in prior)
+    imps = sum(_f(r.get("impressions")) for r in prior)
+    clicks = sum(_f(r.get("clicks")) for r in prior)
+    cpl_target = _num(((j.get("deliverables", {}).get("campanha") or {}).get("kpis") or {}).get("cpl_alvo"), 0)
+    return {
+        "kpis": {
+            "spend": round(spend, 2), "impressions": int(imps), "clicks": int(clicks),
+            "ctr": round(clicks / imps * 100, 2) if imps else 0,
+            "views": views, "leads": leads,
+            "conversion": round(leads / views * 100, 1) if views else 0,
+            "cpl": round(spend / leads, 2) if leads else None, "cpl_target": cpl_target or None,
+        },
+        "alerts": build_alerts(recent, prior, views, leads, spend, cpl_target),
+    }
+
+
+SUGGEST_PROMPTS = {
+    "copy": 'O anúncio está com CTR baixo. Crie novas copies. JSON: {"headlines": ["", "", ""], "primary_texts": ["", "", ""], "angulo": ""}',
+    "criativos": 'O criativo está com fadiga. Crie 3 novos criativos com ângulos diferentes. JSON: {"criativos": [{"tipo": "video|estatico", "gancho": "", "roteiro_ou_texto": "", "prompt_imagem": ""}]}',
+    "estrutura": 'A conversão/CPL está ruim. Diagnostique e sugira nova estrutura (oferta, página, público). JSON: {"diagnostico": "", "mudancas": [{"onde": "", "o_que": "", "por_que": ""}], "nova_headline_pagina": ""}',
+}
+
+
+class SuggestIn(BaseModel):
+    kind: str
+    context: str = Field(default="", max_length=2000)
+
+
+@router.post("/journey/{jid}/suggest")
+async def suggest(jid: str, body: SuggestIn, user: dict = Depends(get_current_user),
+                  db: AsyncIOMotorDatabase = Depends(get_db)):
+    if body.kind not in SUGGEST_PROMPTS:
+        raise HTTPException(status_code=400, detail="Tipo inválido")
+    j = await _get_journey(db, jid, user["id"])
+    await charge_resource(db, user["id"], "journey_generation", f"Copiloto: sugestão de {body.kind}")
+    d = j.get("deliverables", {})
+    ctx = (f"Briefing: {_brief_text(j)}\nCopy atual: {json.dumps(d.get('copy', {}), ensure_ascii=False)}\n"
+           f"Criativos atuais: {json.dumps(d.get('criativos', {}), ensure_ascii=False)}\nAlerta: {body.context}")
+    system = "Você é um gestor de tráfego sênior otimizando um funil de aplicação. Português do Brasil."
+    out = await llm.complete_text(f"journey-{jid}-suggest", system, SUGGEST_PROMPTS[body.kind] + "\n\n" + ctx)
+    await record_usage(db, "journey_generation", user_id=user["id"], input_text=system + ctx, output_text=out)
+    data = _json_from(out)
+    if not data:
+        raise HTTPException(status_code=502, detail="A IA não retornou um resultado válido. Tente de novo.")
+    item = {"id": str(uuid.uuid4()), "kind": body.kind, "context": body.context, "data": data, "created_at": _now()}
+    sugs = ([item] + (j.get("suggestions") or []))[:10]
+    await db.journeys.update_one({"id": jid}, {"$set": {"suggestions": sugs}})
+    j["suggestions"] = sugs
+    return j
+
+
 class MetaStatusIn(BaseModel):
     active: bool
 

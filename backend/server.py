@@ -61,6 +61,7 @@ from routes.referrals import router as referrals_router
 from routes.wallet import router as wallet_router
 from routes.page_agent import router as page_agent_router
 from routes.campaign_knowledge import router as campaign_knowledge_router
+from routes.journey import router as journey_router
 from services.db import init_db_indexes
 from services.seed import seed_resources, seed_plans
 from services import llm
@@ -146,6 +147,7 @@ app.include_router(referrals_router)
 app.include_router(wallet_router)
 app.include_router(page_agent_router)
 app.include_router(campaign_knowledge_router)
+app.include_router(journey_router)
 
 
 @app.get("/api/")

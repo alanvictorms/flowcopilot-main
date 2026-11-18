@@ -69,6 +69,9 @@ import BrandGuard from "@/pages/BrandGuard";
 import Plans from "@/pages/Plans";
 import WalletPage from "@/pages/Wallet";
 import Onboarding from "@/pages/Onboarding";
+import Copilot from "@/pages/Copilot";
+import Leads from "@/pages/Leads";
+import PublicLanding from "@/pages/PublicLanding";
 
 function Protected({ children }) {
   const { user } = useAuth();
@@ -93,7 +96,7 @@ function AdminOnly({ children }) {
 function PublicOnly({ children }) {
   const { user } = useAuth();
   if (user === undefined) return null;
-  if (user) return <Navigate to="/app/dashboard" replace />;
+  if (user) return <Navigate to="/app/copilot" replace />;
   return children;
 }
 
@@ -116,7 +119,7 @@ function LoginAs() {
     if (!t) { navigate("/login", { replace: true }); return; }
     localStorage.setItem("mfa_token", t);
     api.get("/auth/me", { headers: { Authorization: `Bearer ${t}` } })
-      .then(({ data }) => { signin(data, t); navigate("/app/dashboard", { replace: true }); })
+      .then(({ data }) => { signin(data, t); navigate("/app/copilot", { replace: true }); })
       .catch(() => { localStorage.removeItem("mfa_token"); navigate("/login", { replace: true }); });
   }, []);
   return (
@@ -134,6 +137,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Landing />} />
+            <Route path="/p/:slug" element={<PublicLanding />} />
             <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
             <Route path="/login-as" element={<LoginAs />} />
             <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
@@ -148,7 +152,9 @@ export default function App() {
                 </Protected>
               }
             >
-              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route index element={<Navigate to="copilot" replace />} />
+              <Route path="copilot" element={<Copilot />} />
+              <Route path="leads" element={<Leads />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="campaigns" element={<Campaigns />} />
               <Route path="audit" element={<Audit />} />

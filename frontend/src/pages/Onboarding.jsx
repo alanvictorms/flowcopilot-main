@@ -116,7 +116,7 @@ export default function Onboarding() {
       const { data } = await api.get("/auth/me");
       signin(data, localStorage.getItem("mfa_token"));
     } catch {}
-    navigate("/app/dashboard");
+    navigate("/app/copilot");
   };
 
   const finish = done;

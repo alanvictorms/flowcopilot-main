@@ -39,6 +39,8 @@ DEFAULT_RESOURCES = [
      "Verificação de aderência à marca e originalidade do criativo.", 1),
     ("autopilot_run", "Execução do Autopilot", "Autonomia",
      "Ciclo autônomo do agente (análise + ações propostas/executadas).", 3),
+    ("journey_generation", "Copiloto: geração de entregável", "Funil",
+     "Copy, landing page, criativos ou estrutura de campanha gerados na jornada.", 3),
 ]
 
 

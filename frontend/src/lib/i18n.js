@@ -10,7 +10,7 @@
  */
 
 const nav_pt = {
-  "nav.dashboard": "Visão Geral", "nav.campaigns": "Campanhas", "nav.audit": "Auditoria",
+  "nav.dashboard": "Visão Geral", "nav.copilot": "Copiloto", "nav.leads": "Leads", "nav.results": "Resultados", "nav.campaigns": "Campanhas", "nav.audit": "Auditoria",
   "nav.creatives": "Criativos IA", "nav.autopilot": "Piloto de Criativos",
   "nav.intelligence": "Inteligência de Mercado", "nav.creative-factory": "Creative Factory",
   "nav.fatigue": "Fadiga Criativa", "nav.objections": "Objeções → Criativos",
@@ -37,7 +37,7 @@ const nav_pt = {
 };
 
 const nav_en = {
-  "nav.dashboard": "Overview", "nav.campaigns": "Campaigns", "nav.audit": "Audit",
+  "nav.dashboard": "Overview", "nav.copilot": "Copilot", "nav.leads": "Leads", "nav.results": "Results", "nav.campaigns": "Campaigns", "nav.audit": "Audit",
   "nav.creatives": "AI Creatives", "nav.approvals": "Approvals", "nav.rules": "Rules",
   "nav.autonomy": "Autonomy", "nav.profile": "Profile", "nav.plans": "Plans", "nav.wallet": "Wallet",
   "nav.admin": "Admin Panel", "nav.agency": "Agency Center", "nav.brain": "Business Brain",
@@ -51,7 +51,7 @@ const nav_en = {
 };
 
 const nav_es = {
-  "nav.dashboard": "Resumen", "nav.campaigns": "Campañas", "nav.approvals": "Aprobaciones",
+  "nav.dashboard": "Resumen", "nav.copilot": "Copiloto", "nav.leads": "Leads", "nav.results": "Resultados", "nav.campaigns": "Campañas", "nav.approvals": "Aprobaciones",
   "nav.rules": "Reglas", "nav.autonomy": "Autonomía", "nav.profile": "Perfil",
   "nav.plans": "Planes", "nav.wallet": "Billetera", "nav.admin": "Panel Admin",
   "nav.agency": "Central de Agencia", "nav.brain": "Cerebro del Negocio", "nav.chat": "Chat IA",

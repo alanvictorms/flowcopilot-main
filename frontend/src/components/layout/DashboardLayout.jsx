@@ -6,7 +6,7 @@ import {
   FlaskConical, Brain, ScrollText, Radar, TrendingUp, Stethoscope,
   TestTube2, UserCog, Moon, Sun, User, Inbox,
   Recycle, Radio, Users, Target, UserCheck, Gauge, CalendarDays,
-  CreditCard, Coins, RefreshCw,
+  CreditCard, Coins, RefreshCw, Compass, Contact,
   ChevronDown, ChevronRight,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
@@ -28,12 +28,14 @@ import PageAgentLoader from "@/components/PageAgentLoader";
 // Os módulos ainda não fundidos ficam em "Avançado" (recolhível). Nada foi
 // removido: todas as rotas continuam acessíveis enquanto consolidamos.
 const HOME_NAV = [
-  { to: "/app/dashboard", i18nKey: "nav.dashboard", icon: LayoutDashboard, testid: "nav-dashboard" },
+  { to: "/app/copilot", i18nKey: "nav.copilot", icon: Compass, testid: "nav-copilot" },
+  { to: "/app/campaigns", i18nKey: "nav.campaigns", icon: Megaphone, testid: "nav-campaigns" },
+  { to: "/app/creatives", i18nKey: "nav.creatives", icon: Sparkles, testid: "nav-creatives" },
+  { to: "/app/leads", i18nKey: "nav.leads", icon: Contact, testid: "nav-leads" },
+  { to: "/app/dashboard", i18nKey: "nav.results", icon: LayoutDashboard, testid: "nav-dashboard" },
 ];
 
 const OPS_NAV = [
-  { to: "/app/campaigns", i18nKey: "nav.campaigns", icon: Megaphone, testid: "nav-campaigns" },
-  { to: "/app/creatives", i18nKey: "nav.creatives", icon: Sparkles, testid: "nav-creatives" },
   { to: "/app/approvals", i18nKey: "nav.approvals", icon: Inbox, testid: "nav-approvals" },
   { to: "/app/chat", i18nKey: "nav.chat", icon: MessageSquare, testid: "nav-chat" },
 ];

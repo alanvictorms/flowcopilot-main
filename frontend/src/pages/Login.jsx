@@ -41,7 +41,7 @@ export default function Login() {
       else localStorage.removeItem("fp_remember_email");
       signin(data.user, data.access_token);
       toast.success(`Bem-vindo, ${data.user.name}`);
-      navigate("/app/dashboard");
+      navigate("/app/copilot");
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail) || err.message);
     } finally {

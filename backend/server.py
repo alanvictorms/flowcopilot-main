@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
     plans_inserted = await seed_plans(db)
     logger.info(f"Default plans seeded ({plans_inserted} new plan(s))")
     await llm.load_from_db(db)
-    logger.info(f"LLM config loaded (mode={llm.get_config().get('mode')})")
+    logger.info(f"LLM config loaded (provider={llm.get_config().get('provider')})")
     app.state.db = db
     import asyncio
     task = asyncio.create_task(automation_loop(db))

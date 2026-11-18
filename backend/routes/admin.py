@@ -360,7 +360,7 @@ async def audit_log(
 
 # ── LLM provider config ───────────────────────────────────────────
 class LLMConfigIn(BaseModel):
-    mode: str = "emergent"                 # emergent (padrão, sem seleção) | custom
+    mode: str = "custom"
     base_url: str = "https://api.openai.com/v1"
     provider: str = "custom"
     api_key: str = ""

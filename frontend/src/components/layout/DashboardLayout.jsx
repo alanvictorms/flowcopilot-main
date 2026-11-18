@@ -24,6 +24,7 @@ import FloatingChat from "@/components/FloatingChat";
 import Flag from "@/components/Flag";
 import PageAgentLoader from "@/components/PageAgentLoader";
 import { useBrand, loadTenantBrand } from "@/lib/brand";
+import translations from "@/lib/i18n";
 
 // ── Navegação enxuta (8 grupos) ───────────────────────────────────
 // Os módulos ainda não fundidos ficam em "Avançado" (recolhível). Nada foi
@@ -130,6 +131,13 @@ export default function DashboardLayout() {
   const initials = (user?.name || user?.email || "U").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
   const helpKey = getHelpKey(location.pathname);
   const helpText = t(helpKey);
+  const slug = location.pathname.replace("/app/", "").split("/")[0];
+  const subKey = `sub.${slug}`;
+  const subtitle = translations[lang]?.[subKey] || translations.pt[subKey] || "";
+  const pageTitle = activeItem ? t(activeItem.i18nKey) : brand.name;
+  useEffect(() => {
+    document.title = pageTitle === brand.name ? brand.name : `${pageTitle} · ${brand.name}`;
+  }, [pageTitle, brand.name]);
 
   const NavGroup = ({ titleKey, items }) => (
     <div className="mb-3">
@@ -256,12 +264,13 @@ export default function DashboardLayout() {
                   <p className="text-[11px] text-muted-foreground">{t("header.overview")}</p>
                 </>
               ) : (
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-semibold tracking-tight truncate" data-testid="page-title">
-                    {activeItem ? t(activeItem.i18nKey) : brand.name}
-                  </h1>
-                  <HelpTooltip text={helpText !== helpKey ? helpText : undefined} />
-                </div>
+                <>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-base md:text-lg font-semibold tracking-tight truncate leading-tight" data-testid="page-title">{pageTitle}</h1>
+                    <HelpTooltip text={helpText !== helpKey ? helpText : undefined} />
+                  </div>
+                  {subtitle && <p className="hidden sm:block text-[11px] text-muted-foreground truncate" data-testid="page-subtitle">{subtitle}</p>}
+                </>
               )}
             </div>
 

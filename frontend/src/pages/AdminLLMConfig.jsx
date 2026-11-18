@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Save, Loader2, Server, KeyRound, Info, CheckCircle2 } from "lucide-react";
+import { Sparkles, Save, Loader2, Info } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ export default function AdminLLMConfig() {
   const save = async () => {
     setSaving(true);
     try {
-      const { providers: _p, ...body } = cfg;
+      const { providers: _p, ...body } = { ...cfg, mode: "custom" };
       await api.post("/admin/llm-config", body);
       toast.success("Configuração de modelos salva e aplicada.");
     } catch (err) {
@@ -62,19 +62,6 @@ export default function AdminLLMConfig() {
     );
   };
 
-  const ModeCard = ({ value, icon: Icon, title, desc }) => {
-    const active = cfg.mode === value;
-    return (
-      <button onClick={() => set({ mode: value })} className={`text-left p-4 rounded-2xl border-2 transition-colors ${active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
-        <div className="flex items-center gap-2 mb-1">
-          <Icon className={`w-4 h-4 ${active ? "text-primary" : "text-muted-foreground"}`} />
-          <span className="text-sm font-semibold">{title}</span>
-        </div>
-        <div className="text-xs text-muted-foreground leading-relaxed">{desc}</div>
-      </button>
-    );
-  };
-
   return (
     <div className="space-y-4 max-w-2xl">
       <Card className="p-6 rounded-2xl">
@@ -82,27 +69,13 @@ export default function AdminLLMConfig() {
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center"><Sparkles className="w-5 h-5 text-primary" /></div>
           <div>
             <div className="text-sm font-semibold">Modelos de IA da aplicação</div>
-            <div className="text-xs text-muted-foreground">Escolha usar a LLM interna da Emergent ou suas próprias credenciais.</div>
+            <div className="text-xs text-muted-foreground">Escolha o provedor, os modelos e informe sua chave de API.</div>
           </div>
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <ModeCard value="emergent" icon={Server} title="LLM interna (Emergent)" desc="Padrão. Usa a IA interna, exatamente como o sistema funcionava antes. Sem configuração." />
-        <ModeCard value="custom" icon={KeyRound} title="Credenciais próprias" desc="Sua chave: Google Gemini, OpenAI, OpenRouter ou outro endpoint compatível." />
-      </div>
 
-      {cfg.mode === "emergent" ? (
-        <Card className="p-6 rounded-2xl">
-          <div className="flex items-start gap-3">
-            <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
-            <div className="text-sm text-muted-foreground leading-relaxed">
-              O sistema está usando a <b className="text-foreground">IA interna da Emergent</b>, com os modelos padrão — <b>funciona como antes</b>, sem nada para configurar.
-              Para usar sua própria chave (OpenAI etc.), selecione <b>Credenciais próprias</b> acima. Para voltar ao normal, basta selecionar esta opção e salvar.
-            </div>
-          </div>
-        </Card>
-      ) : (
+      {(
         <Card className="p-6 rounded-2xl space-y-4">
           <div className="space-y-1.5">
             <Label>Provedor</Label>

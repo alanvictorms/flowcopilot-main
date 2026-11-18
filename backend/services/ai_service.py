@@ -1,7 +1,7 @@
 """
 AI service — análise, scoring, geração e chat.
 
-O provedor/modelo é definido pelo admin via services.llm (Emergent interna ou
+O provedor/modelo é definido pelo admin via services.llm (Gemini, OpenAI ou
 credenciais próprias compatíveis com OpenAI). Este módulo só monta os prompts e
 interpreta as respostas.
 """

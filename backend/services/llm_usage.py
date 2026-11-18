@@ -1,7 +1,7 @@
 """
 Registro de consumo de tokens das execuções de IA.
 
-A API interna (Emergent LLM) nem sempre devolve a contagem exata de tokens.
+O provedor de LLM nem sempre devolve a contagem exata de tokens.
 Quando ela devolver, usamos o valor real; caso contrário estimamos por
 comprimento de texto (~4 caracteres por token) — suficiente para o admin ter
 uma MÉDIA de consumo por recurso, que é o objetivo do painel.

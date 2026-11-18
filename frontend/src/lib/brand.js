@@ -30,7 +30,7 @@ export function applyBrand(next) {
   } else {
     ["--primary", "--primary-foreground", "--ring"].forEach((v) => root.style.removeProperty(v));
   }
-  document.title = brand.name;
+  if (brand.tenant_id) document.title = brand.name;
   const icon = document.querySelector("link[rel~='icon']");
   if (icon && brand.logo) icon.href = brand.logo;
   listeners.forEach((fn) => fn(brand));

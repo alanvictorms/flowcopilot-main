@@ -1,30 +1,17 @@
 """
-Camada central de LLM — configurável pelo admin.
+Camada central de LLM — configurável pelo admin (Admin → Modelos IA).
 
-Dois modos:
-- "emergent" (PADRÃO): usa a chave interna da Emergent com os MESMOS modelos de
-  antes. NÃO há seleção de modelo — é um passthrough para o comportamento original.
-- "custom": endpoint compatível com a API da OpenAI (chat/completions + images),
-  com chave e base_url próprios. Cobre OpenAI, OpenRouter, Groq, DeepSeek, Ollama, etc.
-
-Desligar o modo custom (voltar para "emergent") restaura exatamente o comportamento
-anterior, independente do que estiver salvo, porque o modo Emergent ignora a config
-e usa os modelos fixos abaixo.
+Provedores: Google Gemini, OpenAI, OpenRouter ou qualquer endpoint compatível com a
+API da OpenAI (chat/completions + images). Imagem do Gemini usa a API nativa.
 
 A config fica em cache de módulo (carregada no startup e atualizada quando o admin
 salva), então os chamadores não precisam receber o `db`.
 """
-import os
 import json
 from typing import AsyncIterator
 
-# Modo Emergent = comportamento ORIGINAL, com modelos FIXOS (sem seleção pelo admin).
-EMERGENT_TEXT_PROVIDER = "anthropic"
-EMERGENT_TEXT_MODEL = "claude-sonnet-4-6"
-EMERGENT_IMAGE_PROVIDER = "gemini"
-EMERGENT_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
+from fastapi import HTTPException
 
-# Config editável pelo admin — só o essencial do modo custom.
 # Provedores selecionáveis no admin. Texto sempre via endpoint compatível OpenAI;
 # imagem do Gemini usa a API nativa (generateContent).
 PROVIDERS = {
@@ -56,7 +43,7 @@ PROVIDERS = {
 }
 
 DEFAULTS = {
-    "mode": "emergent",                       # emergent | custom
+    "mode": "custom",                         # legado; mantido por compatibilidade
     "provider": "custom",                     # chave de PROVIDERS (custom = usa base_url salvo)
     "base_url": "https://api.openai.com/v1",  # modo custom (compatível OpenAI)
     "api_key": "",
@@ -85,25 +72,12 @@ async def load_from_db(db) -> None:
 
 def current_model() -> str:
     """Rótulo do modelo em uso (para telemetria)."""
-    return _CONFIG["custom_model"] if _CONFIG.get("mode") == "custom" else EMERGENT_TEXT_MODEL
+    return _CONFIG["custom_model"]
 
 
-def _emergent_key() -> str:
-    key = os.environ.get("EMERGENT_LLM_KEY")
-    if not key:
-        raise RuntimeError("EMERGENT_LLM_KEY não está configurada.")
-    return key
-
-
-async def _emergent_stream(session_id: str, system: str, user: str) -> AsyncIterator[str]:
-    from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
-    chat = LlmChat(api_key=_emergent_key(), session_id=session_id, system_message=system)\
-        .with_model(EMERGENT_TEXT_PROVIDER, EMERGENT_TEXT_MODEL)
-    async for ev in chat.stream_message(UserMessage(text=user)):
-        if isinstance(ev, TextDelta):
-            yield ev.content
-        elif isinstance(ev, StreamDone):
-            return
+def _require_key() -> None:
+    if not _CONFIG.get("api_key"):
+        raise HTTPException(status_code=503, detail="IA não configurada: defina o provedor e a chave em Admin → Modelos IA.")
 
 
 def _base_url() -> str:
@@ -146,12 +120,9 @@ async def _openai_stream(session_id: str, system: str, user: str) -> AsyncIterat
 
 async def stream_text(session_id: str, system: str, user: str) -> AsyncIterator[str]:
     """Streaming de texto respeitando a config do admin."""
-    if _CONFIG.get("mode") == "custom" and _CONFIG.get("api_key"):
-        async for chunk in _openai_stream(session_id, system, user):
-            yield chunk
-    else:
-        async for chunk in _emergent_stream(session_id, system, user):
-            yield chunk
+    _require_key()
+    async for chunk in _openai_stream(session_id, system, user):
+        yield chunk
 
 
 async def complete_text(session_id: str, system: str, user: str) -> str:
@@ -163,19 +134,6 @@ async def complete_text(session_id: str, system: str, user: str) -> str:
 
 
 # ── Geração de imagem ─────────────────────────────────────────────
-async def _emergent_image(prompt: str):
-    import uuid as _uuid
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    chat = LlmChat(api_key=_emergent_key(), session_id=f"img-{_uuid.uuid4()}",
-                   system_message="You generate advertising images.")\
-        .with_model(EMERGENT_IMAGE_PROVIDER, EMERGENT_IMAGE_MODEL)\
-        .with_params(modalities=["image", "text"])
-    _txt, imgs = await chat.send_message_multimodal_response(UserMessage(text=prompt))
-    if not imgs:
-        return None
-    return {"data": imgs[0]["data"], "mime": imgs[0].get("mime_type", "image/png")}
-
-
 async def _openai_image(prompt: str):
     import base64
     import httpx
@@ -221,8 +179,7 @@ async def _gemini_image(prompt: str):
 
 async def generate_image(prompt: str):
     """Gera uma imagem respeitando a config. Retorna {data(base64), mime} ou None."""
-    if _CONFIG.get("mode") == "custom" and _CONFIG.get("api_key"):
-        if _CONFIG.get("provider") == "gemini":
-            return await _gemini_image(prompt)
-        return await _openai_image(prompt)
-    return await _emergent_image(prompt)
+    _require_key()
+    if _CONFIG.get("provider") == "gemini":
+        return await _gemini_image(prompt)
+    return await _openai_image(prompt)

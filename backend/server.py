@@ -63,6 +63,7 @@ from routes.page_agent import router as page_agent_router
 from routes.campaign_knowledge import router as campaign_knowledge_router
 from routes.journey import router as journey_router
 from routes.tenants import router as tenants_router
+from routes.videos import router as videos_router
 from services.db import init_db_indexes
 from services.seed import seed_resources, seed_plans
 from services import llm
@@ -150,6 +151,7 @@ app.include_router(page_agent_router)
 app.include_router(campaign_knowledge_router)
 app.include_router(journey_router)
 app.include_router(tenants_router)
+app.include_router(videos_router)
 
 
 @app.get("/api/")

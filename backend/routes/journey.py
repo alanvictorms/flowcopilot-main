@@ -5,6 +5,7 @@ Briefing por conversa → funil → copy → landing → criativos → campanha 
 aprovação → monitoramento. Inclui a landing pública (/api/public/lp/{slug})
 e o CRM de leads (/api/leads).
 """
+import asyncio
 import json
 import re
 import secrets
@@ -23,6 +24,7 @@ from services.security import get_current_user
 from services.meta_client import MetaAPIError
 from routes.meta import get_meta_client
 from routes.builder import upload_image, ImageUploadIn
+from routes.videos import ready_videos
 
 router = APIRouter(prefix="/api", tags=["journey"])
 
@@ -362,6 +364,38 @@ async def _creative_images(user: dict, db, criativos: list, n: int) -> list[str]
     return hashes
 
 
+async def _upload_meta_video(client, user: dict, db, v: dict) -> dict:
+    """Sobe o vídeo editado e a miniatura na conta e espera o Meta processar."""
+    import base64
+    import os as _os
+    import httpx
+    ver = _os.environ.get("META_GRAPH_VERSION", "v25.0")
+    with open(v["path"], "rb") as f:
+        content = f.read()
+    async with httpx.AsyncClient(timeout=300.0) as c:
+        r = await c.post(f"https://graph-video.facebook.com/{ver}/{client.ad_account_id}/advideos",
+                         params={"access_token": client.access_token},
+                         data={"name": v.get("title") or "Vídeo"},
+                         files={"source": ("video.mp4", content, "video/mp4")})
+    if r.status_code >= 400:
+        raise MetaAPIError(r.status_code, r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text)
+    video_id = r.json()["id"]
+    thumb = base64.b64encode(open(v["thumb"], "rb").read()).decode() if v["thumb"].exists() else None
+    image_hash = None
+    if thumb:
+        up = await upload_image(ImageUploadIn(filename="thumb.jpg", data_base64=thumb), user=user, db=db)
+        image_hash = up.get("image_hash")
+    for _ in range(45):  # até ~90s para o Meta processar
+        st = await client._request("GET", f"/{video_id}", params={"fields": "status"})
+        vs = (st.get("status") or {}).get("video_status")
+        if vs == "ready":
+            break
+        if vs == "error":
+            raise HTTPException(status_code=400, detail="O Meta não conseguiu processar um dos vídeos.")
+        await asyncio.sleep(2)
+    return {"video_id": video_id, "image_hash": image_hash, "title": v.get("title")}
+
+
 @router.post("/journey/{jid}/publish")
 async def publish_campaign(jid: str, body: PublishIn, user: dict = Depends(get_current_user),
                            db: AsyncIOMotorDatabase = Depends(get_db)):
@@ -380,8 +414,20 @@ async def publish_campaign(jid: str, body: PublishIn, user: dict = Depends(get_c
         raise HTTPException(status_code=400, detail="A estrutura da campanha não tem anúncios")
     budget = max(_num(plan.get("orcamento_diario"), _num((j.get("briefing") or {}).get("orcamento_diario"), 30)), 10)
     leads = bool(body.pixel_id)
-    hashes = (await _upload_own_images(user, db, body.images) if body.images
-              else await _creative_images(user, db, (d.get("criativos") or {}).get("criativos", []), len(anuncios)))
+    videos = await ready_videos(db, user["id"], jid)
+    if body.images:
+        hashes = await _upload_own_images(user, db, body.images)
+    else:
+        try:
+            hashes = await _creative_images(user, db, (d.get("criativos") or {}).get("criativos", []), len(anuncios))
+        except HTTPException:
+            if not videos:
+                raise
+            hashes = []  # só anúncios em vídeo
+    try:
+        meta_videos = [await _upload_meta_video(client, user, db, v) for v in videos[:3]]
+    except MetaAPIError as e:
+        raise _meta_err(e)
 
     campaign_id = None
     try:
@@ -425,7 +471,23 @@ async def publish_campaign(jid: str, body: PublishIn, user: dict = Depends(get_c
                 adset["promoted_object"] = json.dumps({"pixel_id": body.pixel_id, "custom_event_type": "LEAD"})
             res = await client._request("POST", f"/{client.ad_account_id}/adsets", data=adset)
             adset_ids.append(res["id"])
-            for i, ad in enumerate(anuncios):
+            for k, mv in enumerate(meta_videos):
+                ad = anuncios[k % len(anuncios)]
+                vdata = {"video_id": mv["video_id"], "message": ad.get("texto") or "",
+                         "title": (ad.get("headline") or "")[:40],
+                         "call_to_action": {"type": ad.get("cta") or "APPLY_NOW", "value": {"link": body.landing_url}}}
+                if mv["image_hash"]:
+                    vdata["image_hash"] = mv["image_hash"]
+                creative = await client._request("POST", f"/{client.ad_account_id}/adcreatives", data={
+                    "name": f"{mv['title']} – Vídeo",
+                    "object_story_spec": json.dumps({"page_id": body.page_id, "video_data": vdata}),
+                })
+                res = await client._request("POST", f"/{client.ad_account_id}/ads", data={
+                    "name": f"{mv['title']} (vídeo)", "adset_id": adset_ids[-1],
+                    "creative": json.dumps({"creative_id": creative["id"]}), "status": "ACTIVE",
+                })
+                ad_ids.append(res["id"])
+            for i, ad in enumerate(anuncios if hashes else []):
                 creative = await client._request("POST", f"/{client.ad_account_id}/adcreatives", data={
                     "name": f"{ad.get('headline') or 'Anúncio'} – Criativo",
                     "object_story_spec": json.dumps({"page_id": body.page_id, "link_data": {

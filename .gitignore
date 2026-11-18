@@ -18,3 +18,5 @@ frontend/serve_local.py
 # os
 .DS_Store
 Thumbs.db
+
+backend/media/

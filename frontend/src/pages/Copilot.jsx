@@ -5,11 +5,12 @@ import {
   MessageSquare, Workflow, PenLine, LayoutTemplate, Image as ImageIcon, Megaphone, Activity,
   ChevronLeft, ChevronRight, Pencil,
 } from "lucide-react";
-import api, { formatApiError } from "@/lib/api";
+import api, { API_BASE, formatApiError } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import Teleprompter from "@/components/Teleprompter";
 
 const err = (e) => toast.error(formatApiError(e.response?.data?.detail));
 const GEN_STEPS = ["copy", "landing", "criativos", "campanha"];
@@ -48,6 +49,60 @@ function Pretty({ value }) {
     );
   }
   return <span>{String(value ?? "")}</span>;
+}
+
+// Vídeos do teleprompter (etapa Criativos)
+function VideosSection({ j }) {
+  const crs = (j.deliverables?.criativos?.criativos || []).map((c, i) => ({ ...c, i })).filter((c) => c.tipo === "video");
+  const [videos, setVideos] = useState([]);
+  const [rec, setRec] = useState(null);
+  const token = localStorage.getItem("mfa_token");
+  const load = () => api.get(`/journey/${j.id}/videos`).then(({ data }) => setVideos(data)).catch(() => {});
+  useEffect(() => { load(); }, [j.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const remove = async (v) => {
+    if (!window.confirm("Excluir este vídeo?")) return;
+    await api.delete(`/videos/${v.id}`).catch(err);
+    load();
+  };
+  if (!crs.length) return null;
+  return (
+    <div className="space-y-3 pt-4 border-t border-border/60">
+      <div>
+        <div className="text-sm font-semibold">Gravar vídeos</div>
+        <div className="text-xs text-muted-foreground">Grave com o teleprompter; o vídeo sai editado em 9:16 com legendas e entra na campanha.</div>
+      </div>
+      {crs.map((c) => {
+        const mine = videos.filter((v) => v.criativo_index === c.i);
+        return (
+          <div key={c.i} className="rounded-2xl border border-border/60 bg-muted/40 p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{c.titulo || `Vídeo ${c.i + 1}`}</div>
+                {c.gancho && <div className="text-xs text-muted-foreground truncate">Gancho: {c.gancho}</div>}
+              </div>
+              <button onClick={() => setRec(c)}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold text-white bg-gradient-to-r from-rose-500 to-red-600 shadow-[0_8px_20px_-10px_rgba(225,29,72,0.9)]">
+                <span className="w-2 h-2 rounded-full bg-white" /> {mine.length ? "Gravar outro" : "Gravar"}
+              </button>
+            </div>
+            {mine.length > 0 && (
+              <div className="flex gap-3 overflow-x-auto hide-scrollbar">
+                {mine.map((v) => (
+                  <div key={v.id} className="relative shrink-0 w-28">
+                    <video src={`${API_BASE}/videos/${v.id}/file?token=${token}`} poster={`${API_BASE}/videos/${v.id}/thumb?token=${token}`}
+                      controls playsInline className="w-28 aspect-[9/16] rounded-xl object-cover bg-black" />
+                    <div className="mt-1 text-[10px] text-muted-foreground">{v.duration}s{v.captions ? " · legendado" : ""}</div>
+                    <button onClick={() => remove(v)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center"><Trash2 className="w-3 h-3" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {rec && <Teleprompter journeyId={j.id} index={rec.i} criativo={rec} onClose={() => setRec(null)} onSaved={load} />}
+    </div>
+  );
 }
 
 function StepCard({ j, step, busy, onGenerate, onConfirm, onSave }) {
@@ -89,6 +144,7 @@ function StepCard({ j, step, busy, onGenerate, onConfirm, onSave }) {
       ) : (
         <>
           <div className="max-h-[480px] overflow-y-auto scrollbar-thin pr-1"><Pretty value={data} /></div>
+          {step === "criativos" && <VideosSection j={j} />}
           <div className="flex flex-wrap gap-2 pt-4 border-t border-border/60">
             {!done && (
               <Button size="sm" className="rounded-full" onClick={() => onConfirm(step)} disabled={busy}>

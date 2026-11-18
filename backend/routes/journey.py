@@ -167,6 +167,7 @@ async def journey_chat(jid: str, body: ChatIn, user: dict = Depends(get_current_
     msgs = j.get("messages", []) + [{"role": "user", "content": body.message}]
     convo = "\n".join(f"{'Cliente' if m['role'] == 'user' else 'Copiloto'}: {m['content']}" for m in msgs[-30:])
     reply = await llm.complete_text(f"journey-{jid}", BRIEFING_SYSTEM, convo)
+    reply = re.sub(r"^\s*\**copiloto\**\s*:\s*", "", reply, flags=re.I)  # IA às vezes repete o rótulo
     await record_usage(db, "ai_chat", user_id=user["id"], input_text=BRIEFING_SYSTEM + convo, output_text=reply)
 
     data = _json_from(reply) if '"briefing_done"' in reply else None

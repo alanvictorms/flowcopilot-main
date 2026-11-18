@@ -327,6 +327,20 @@ class PublishIn(BaseModel):
     pixel_id: str = ""
     landing_url: str = Field(min_length=8)
     activate: bool = False
+    images: list[str] = Field(default_factory=list, max_length=3)  # imagens próprias (data URL)
+
+
+async def _upload_own_images(user: dict, db, images: list[str]) -> list[str]:
+    hashes = []
+    for i, data in enumerate(images):
+        if len(data) > 6_000_000:
+            raise HTTPException(status_code=400, detail="Cada imagem deve ter no máximo 4 MB.")
+        up = await upload_image(ImageUploadIn(filename=f"anuncio-{i + 1}.jpg", data_base64=data), user=user, db=db)
+        if up.get("image_hash"):
+            hashes.append(up["image_hash"])
+    if not hashes:
+        raise HTTPException(status_code=400, detail="O Meta não aceitou as imagens enviadas. Use JPG ou PNG.")
+    return hashes
 
 
 async def _creative_images(user: dict, db, criativos: list, n: int) -> list[str]:
@@ -335,15 +349,16 @@ async def _creative_images(user: dict, db, criativos: list, n: int) -> list[str]
     prompts = [p for p in prompts if p][:n] or ["Professional ad image, modern, clean, high contrast"]
     hashes = []
     for i, p in enumerate(prompts):
-        await charge_resource(db, user["id"], "creative_generation", "Copiloto: imagem do anúncio")
         img = await llm.generate_image(f"{p}. Square 1:1 social media ad, no text overlay.")
         if not img:
             continue
+        # cobra só depois que a imagem foi de fato gerada
+        await charge_resource(db, user["id"], "creative_generation", "Copiloto: imagem do anúncio")
         up = await upload_image(ImageUploadIn(filename=f"criativo-{i + 1}.png", data_base64=img["data"]), user=user, db=db)
         if up.get("image_hash"):
             hashes.append(up["image_hash"])
     if not hashes:
-        raise HTTPException(status_code=502, detail="Não foi possível gerar as imagens dos anúncios. Verifique o modelo de imagem no admin.")
+        raise HTTPException(status_code=502, detail="O provedor de IA não devolveu imagens. Envie suas próprias imagens ou troque o modelo de imagem em Admin → Modelos IA.")
     return hashes
 
 
@@ -365,7 +380,8 @@ async def publish_campaign(jid: str, body: PublishIn, user: dict = Depends(get_c
         raise HTTPException(status_code=400, detail="A estrutura da campanha não tem anúncios")
     budget = max(_num(plan.get("orcamento_diario"), _num((j.get("briefing") or {}).get("orcamento_diario"), 30)), 10)
     leads = bool(body.pixel_id)
-    hashes = await _creative_images(user, db, (d.get("criativos") or {}).get("criativos", []), len(anuncios))
+    hashes = (await _upload_own_images(user, db, body.images) if body.images
+              else await _creative_images(user, db, (d.get("criativos") or {}).get("criativos", []), len(anuncios)))
 
     campaign_id = None
     try:

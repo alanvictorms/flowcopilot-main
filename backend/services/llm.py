@@ -75,6 +75,26 @@ def current_model() -> str:
     return _CONFIG["custom_model"]
 
 
+def _provider_error(kind: str, status: int, body: str) -> HTTPException:
+    """Erro do provedor de IA com mensagem legível (em vez de 500 genérico)."""
+    msg = body
+    try:
+        j = json.loads(body)
+        msg = (j.get("error") or {}).get("message") if isinstance(j.get("error"), dict) else (j.get("error") or j.get("message") or body)
+    except Exception:
+        pass
+    msg = str(msg or "")[:240]
+    if status == 402:
+        return HTTPException(status_code=402, detail=f"O provedor de IA está sem créditos para gerar {kind}. Adicione créditos na conta do provedor ou troque o provedor/modelo em Admin → Modelos IA. ({msg})")
+    if status in (401, 403):
+        return HTTPException(status_code=502, detail=f"Chave de API recusada pelo provedor de IA. Revise a chave em Admin → Modelos IA. ({msg})")
+    if status == 404:
+        return HTTPException(status_code=502, detail=f"Modelo de {kind} não encontrado no provedor. Escolha outro modelo em Admin → Modelos IA. ({msg})")
+    if status == 429:
+        return HTTPException(status_code=503, detail=f"Limite de uso do provedor de IA atingido. Tente em instantes. ({msg})")
+    return HTTPException(status_code=502, detail=f"O provedor de IA falhou ao gerar {kind} ({status}). {msg}")
+
+
 def _require_key() -> None:
     if not _CONFIG.get("api_key"):
         raise HTTPException(status_code=503, detail="IA não configurada: defina o provedor e a chave em Admin → Modelos IA.")
@@ -101,7 +121,7 @@ async def _openai_stream(session_id: str, system: str, user: str) -> AsyncIterat
         async with c.stream("POST", url, headers=headers, json=payload) as r:
             if r.status_code >= 400:
                 body = await r.aread()
-                raise RuntimeError(f"LLM {r.status_code}: {body.decode('utf-8', 'ignore')[:300]}")
+                raise _provider_error("texto", r.status_code, body.decode("utf-8", "ignore"))
             async for line in r.aiter_lines():
                 line = (line or "").strip()
                 if not line or not line.startswith("data:"):
@@ -146,7 +166,7 @@ async def _openai_image(prompt: str):
     async with httpx.AsyncClient(timeout=180.0) as c:
         r = await c.post(url, headers=headers, json=payload)
     if r.status_code >= 400:
-        raise RuntimeError(f"Imagem {r.status_code}: {r.text[:300]}")
+        raise _provider_error("imagens", r.status_code, r.text)
     item = (r.json().get("data") or [{}])[0]
     b64 = item.get("b64_json")
     if not b64 and item.get("url"):
@@ -168,7 +188,7 @@ async def _gemini_image(prompt: str):
     async with httpx.AsyncClient(timeout=180.0) as c:
         r = await c.post(url, headers=headers, json=payload)
     if r.status_code >= 400:
-        raise RuntimeError(f"Imagem {r.status_code}: {r.text[:300]}")
+        raise _provider_error("imagens", r.status_code, r.text)
     for cand in r.json().get("candidates") or []:
         for part in (cand.get("content") or {}).get("parts") or []:
             inline = part.get("inlineData") or part.get("inline_data")

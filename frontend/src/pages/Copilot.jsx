@@ -121,6 +121,17 @@ function PublishCard({ j, busy, onPublish }) {
   const [pixelId, setPixelId] = useState("");
   const [activate, setActivate] = useState(false);
   const [manual, setManual] = useState(false);
+  const [images, setImages] = useState([]);
+
+  const addImages = (files) => {
+    const list = Array.from(files || []).slice(0, 3 - images.length);
+    list.forEach((f) => {
+      if (f.size > 4 * 1024 * 1024) { toast.error(`${f.name}: máximo 4 MB`); return; }
+      const r = new FileReader();
+      r.onload = () => setImages((xs) => (xs.length < 3 ? [...xs, r.result] : xs));
+      r.readAsDataURL(f);
+    });
+  };
   const [loading, setLoading] = useState(false);
 
   const load = () => {
@@ -201,12 +212,30 @@ function PublishCard({ j, busy, onPublish }) {
               </div>
             </div>
           )}
+          <div className="space-y-2">
+            <div className="text-xs font-medium">Imagens dos anúncios <span className="text-muted-foreground font-normal">(opcional — sem imagens, a IA gera)</span></div>
+            <div className="flex flex-wrap gap-2">
+              {images.map((src, i) => (
+                <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border border-border">
+                  <img src={src} alt="" className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => setImages((xs) => xs.filter((_, k) => k !== i))}
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white text-xs leading-none">×</button>
+                </div>
+              ))}
+              {images.length < 3 && (
+                <label className="w-20 h-20 rounded-xl border border-dashed border-border flex flex-col items-center justify-center gap-1 text-[10px] text-muted-foreground cursor-pointer hover:border-primary/50 hover:text-foreground">
+                  <Plus className="w-4 h-4" /> Enviar
+                  <input type="file" accept="image/jpeg,image/png" multiple className="hidden" onChange={(e) => { addImages(e.target.files); e.target.value = ""; }} />
+                </label>
+              )}
+            </div>
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
             Ativar imediatamente (senão fica pausada para revisão)
           </label>
           <Button className="rounded-full" disabled={busy || !validPage}
-            onClick={() => onPublish({ page_id: pageId.trim(), pixel_id: pixelId, activate })}>
+            onClick={() => onPublish({ page_id: pageId.trim(), pixel_id: pixelId, activate, images })}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Rocket className="w-4 h-4 mr-2" />}
             {busy ? "Publicando no Meta..." : "Aprovar e publicar campanha"}
           </Button>

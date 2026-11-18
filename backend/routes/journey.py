@@ -20,6 +20,9 @@ from services.credits import charge_resource
 from services.db import get_db
 from services.llm_usage import record_usage
 from services.security import get_current_user
+from services.meta_client import MetaAPIError
+from routes.meta import get_meta_client
+from routes.builder import upload_image, ImageUploadIn
 
 router = APIRouter(prefix="/api", tags=["journey"])
 
@@ -281,25 +284,192 @@ async def confirm_step(jid: str, step: str, user: dict = Depends(get_current_use
     return await _advance(db, j, step)
 
 
-@router.post("/journey/{jid}/approve")
-async def approve_campaign(jid: str, user: dict = Depends(get_current_user),
+# ── Publicação no Meta ───────────────────────────────────────────
+def _meta_err(e: MetaAPIError) -> HTTPException:
+    return HTTPException(status_code=e.status if e.status and e.status < 500 else 400, detail=e.detail)
+
+
+def _num(v, default: float) -> float:
+    m = re.search(r"\d+(?:[.,]\d+)?", str(v or ""))
+    return float(m.group(0).replace(",", ".")) if m else default
+
+
+def _ages(text: str) -> tuple[int, int]:
+    nums = [int(n) for n in re.findall(r"\d+", str(text or ""))]
+    lo = min(max(nums[0], 18), 65) if nums else 18
+    hi = min(max(nums[1], lo), 65) if len(nums) > 1 else 65
+    return lo, hi
+
+
+@router.get("/journey-meta-assets")
+async def meta_assets(user: dict = Depends(get_current_user), db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Páginas e pixels da conta conectada, para o passo de publicação."""
+    client = await get_meta_client(user, db)
+    try:
+        pages = await client._request("GET", "/me/accounts", params={"fields": "id,name", "limit": 100})
+        pixels = await client._request("GET", f"/{client.ad_account_id}/adspixels", params={"fields": "id,name", "limit": 50})
+    except MetaAPIError as e:
+        raise _meta_err(e)
+    return {"pages": pages.get("data", []), "pixels": pixels.get("data", [])}
+
+
+class PublishIn(BaseModel):
+    page_id: str = Field(min_length=1)
+    pixel_id: str = ""
+    landing_url: str = Field(min_length=8)
+    activate: bool = False
+
+
+async def _creative_images(user: dict, db, criativos: list, n: int) -> list[str]:
+    """Gera as imagens dos criativos estáticos e sobe na conta. Retorna image_hashes."""
+    prompts = [c.get("prompt_imagem") or c.get("texto_imagem") for c in criativos if c.get("tipo") == "estatico"]
+    prompts = [p for p in prompts if p][:n] or ["Professional ad image, modern, clean, high contrast"]
+    hashes = []
+    for i, p in enumerate(prompts):
+        await charge_resource(db, user["id"], "creative_generation", "Copiloto: imagem do anúncio")
+        img = await llm.generate_image(f"{p}. Square 1:1 social media ad, no text overlay.")
+        if not img:
+            continue
+        up = await upload_image(ImageUploadIn(filename=f"criativo-{i + 1}.png", data_base64=img["data"]), user=user, db=db)
+        if up.get("image_hash"):
+            hashes.append(up["image_hash"])
+    if not hashes:
+        raise HTTPException(status_code=502, detail="Não foi possível gerar as imagens dos anúncios. Verifique o modelo de imagem no admin.")
+    return hashes
+
+
+@router.post("/journey/{jid}/publish")
+async def publish_campaign(jid: str, body: PublishIn, user: dict = Depends(get_current_user),
                            db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Aprova e publica campanha + conjuntos + anúncios no Meta (pausada, salvo activate=True)."""
     j = await _get_journey(db, jid, user["id"])
     if "campanha" not in j.get("done", []):
         raise HTTPException(status_code=400, detail="Aprove a estrutura da campanha primeiro")
-    await db.journeys.update_one({"id": jid}, {"$set": {"status": "approved", "approved_at": _now()}})
-    j["status"] = "approved"
+    if (j.get("meta") or {}).get("campaign_id"):
+        raise HTTPException(status_code=400, detail="Campanha já publicada")
+    client = await get_meta_client(user, db)
+    d = j.get("deliverables", {})
+    plan = d.get("campanha") or {}
+    conjuntos = (plan.get("conjuntos") or [{}])[:3]
+    anuncios = (plan.get("anuncios") or [])[:3]
+    if not anuncios:
+        raise HTTPException(status_code=400, detail="A estrutura da campanha não tem anúncios")
+    budget = max(_num(plan.get("orcamento_diario"), _num((j.get("briefing") or {}).get("orcamento_diario"), 30)), 10)
+    leads = bool(body.pixel_id)
+    hashes = await _creative_images(user, db, (d.get("criativos") or {}).get("criativos", []), len(anuncios))
+
+    campaign_id = None
+    try:
+        camp = await client.create_campaign({
+            "name": plan.get("nome") or j.get("name") or "Campanha Escola de Leads",
+            "objective": "OUTCOME_LEADS" if leads else "OUTCOME_TRAFFIC",
+            "buying_type": "AUCTION",
+            "status": "PAUSED",
+            "special_ad_categories": "[]",
+            "is_adset_budget_sharing_enabled": "false",
+        })
+        campaign_id = camp["id"]
+        adset_ids, ad_ids = [], []
+        for cj in conjuntos:
+            interests = []
+            for name in (cj.get("interesses") or [])[:5]:
+                if not name:
+                    continue
+                r = await client._request("GET", "/search", params={"type": "adinterest", "q": name, "limit": 1})
+                if r.get("data"):
+                    interests.append({"id": r["data"][0]["id"], "name": r["data"][0]["name"]})
+            age_min, age_max = _ages(cj.get("idade"))
+            targeting = {
+                "geo_locations": {"countries": ["BR"]},
+                "age_min": age_min, "age_max": age_max,
+                "targeting_automation": {"advantage_audience": 0},
+            }
+            if interests:
+                targeting["flexible_spec"] = [{"interests": interests}]
+            adset = {
+                "name": cj.get("nome") or "Conjunto",
+                "campaign_id": campaign_id,
+                "daily_budget": str(int(budget / len(conjuntos) * 100)),
+                "billing_event": "IMPRESSIONS",
+                "optimization_goal": "OFFSITE_CONVERSIONS" if leads else "LANDING_PAGE_VIEWS",
+                "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+                "targeting": json.dumps(targeting),
+                "status": "ACTIVE",
+            }
+            if leads:
+                adset["promoted_object"] = json.dumps({"pixel_id": body.pixel_id, "custom_event_type": "LEAD"})
+            res = await client._request("POST", f"/{client.ad_account_id}/adsets", data=adset)
+            adset_ids.append(res["id"])
+            for i, ad in enumerate(anuncios):
+                creative = await client._request("POST", f"/{client.ad_account_id}/adcreatives", data={
+                    "name": f"{ad.get('headline') or 'Anúncio'} – Criativo",
+                    "object_story_spec": json.dumps({"page_id": body.page_id, "link_data": {
+                        "link": body.landing_url,
+                        "message": ad.get("texto") or "",
+                        "name": (ad.get("headline") or "")[:40],
+                        "image_hash": hashes[i % len(hashes)],
+                        "call_to_action": {"type": ad.get("cta") or "APPLY_NOW", "value": {"link": body.landing_url}},
+                    }}),
+                })
+                res = await client._request("POST", f"/{client.ad_account_id}/ads", data={
+                    "name": ad.get("headline") or f"Anúncio {i + 1}",
+                    "adset_id": adset_ids[-1],
+                    "creative": json.dumps({"creative_id": creative["id"]}),
+                    "status": "ACTIVE",
+                })
+                ad_ids.append(res["id"])
+        if body.activate:
+            await client.update_campaign(campaign_id, {"status": "ACTIVE"})
+    except Exception as e:
+        if campaign_id:  # não deixa campanha órfã pela metade
+            try:
+                await client._request("DELETE", f"/{campaign_id}")
+            except Exception:
+                pass
+        if isinstance(e, MetaAPIError):
+            raise _meta_err(e)
+        raise
+
+    meta = {"campaign_id": campaign_id, "adset_ids": adset_ids, "ad_ids": ad_ids,
+            "status": "ACTIVE" if body.activate else "PAUSED", "published_at": _now()}
+    upd = {"meta": meta, "pixel_id": body.pixel_id or None, "status": "approved", "approved_at": _now()}
+    await db.journeys.update_one({"id": jid}, {"$set": upd})
+    j.update(upd)
     return await _advance(db, j, "aprovacao")
+
+
+class MetaStatusIn(BaseModel):
+    active: bool
+
+
+@router.post("/journey/{jid}/meta-status")
+async def set_meta_status(jid: str, body: MetaStatusIn, user: dict = Depends(get_current_user),
+                          db: AsyncIOMotorDatabase = Depends(get_db)):
+    j = await _get_journey(db, jid, user["id"])
+    cid = (j.get("meta") or {}).get("campaign_id")
+    if not cid:
+        raise HTTPException(status_code=400, detail="Campanha ainda não publicada")
+    client = await get_meta_client(user, db)
+    status = "ACTIVE" if body.active else "PAUSED"
+    try:
+        await client.update_campaign(cid, {"status": status})
+    except MetaAPIError as e:
+        raise _meta_err(e)
+    await db.journeys.update_one({"id": jid}, {"$set": {"meta.status": status}})
+    j["meta"]["status"] = status
+    return j
 
 
 # ── Landing pública ──────────────────────────────────────────────
 @router.get("/public/lp/{slug}")
 async def public_landing(slug: str, db: AsyncIOMotorDatabase = Depends(get_db)):
-    j = await db.journeys.find_one({"landing_slug": slug}, {"_id": 0, "deliverables.landing": 1, "name": 1, "id": 1})
+    j = await db.journeys.find_one({"landing_slug": slug},
+                                   {"_id": 0, "deliverables.landing": 1, "name": 1, "id": 1, "pixel_id": 1})
     if not j:
         raise HTTPException(status_code=404, detail="Página não encontrada")
     await db.journeys.update_one({"id": j["id"]}, {"$inc": {"landing_views": 1}})
-    return {"name": j.get("name"), "landing": j.get("deliverables", {}).get("landing", {})}
+    return {"name": j.get("name"), "landing": j.get("deliverables", {}).get("landing", {}),
+            "pixel_id": j.get("pixel_id")}
 
 
 class LeadIn(BaseModel):

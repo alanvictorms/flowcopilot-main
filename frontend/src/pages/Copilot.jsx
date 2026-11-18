@@ -105,6 +105,68 @@ function StepCard({ j, step, label, busy, onGenerate, onConfirm, onSave }) {
   );
 }
 
+const SEL = "w-full h-9 rounded-md border border-input bg-background px-3 text-sm";
+
+function PublishCard({ j, busy, onPublish }) {
+  const [assets, setAssets] = useState(null);
+  const [failed, setFailed] = useState("");
+  const [pageId, setPageId] = useState("");
+  const [pixelId, setPixelId] = useState("");
+  const [activate, setActivate] = useState(false);
+
+  useEffect(() => {
+    api.get("/journey-meta-assets").then(({ data }) => {
+      setAssets(data);
+      setPageId(data.pages?.[0]?.id || "");
+      setPixelId(data.pixels?.[0]?.id || "");
+    }).catch((e) => setFailed(formatApiError(e.response?.data?.detail)));
+  }, [j.id]);
+
+  return (
+    <Card className="p-5 rounded-2xl space-y-4">
+      <div>
+        <div className="text-sm font-semibold">Tudo pronto para ir ao ar</div>
+        <div className="text-xs text-muted-foreground">Vamos criar campanha, conjuntos e anúncios (com imagens geradas) na sua conta Meta.</div>
+      </div>
+      {failed ? (
+        <div className="text-xs text-red-600">
+          {failed} — conecte sua conta Meta em <a href="/app/settings" className="underline">Configurações</a>.
+        </div>
+      ) : !assets ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : (
+        <>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <div className="text-xs font-medium">Página do Facebook</div>
+              <select className={SEL} value={pageId} onChange={(e) => setPageId(e.target.value)}>
+                {assets.pages.length === 0 && <option value="">Nenhuma página encontrada</option>}
+                {assets.pages.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs font-medium">Pixel (otimização)</div>
+              <select className={SEL} value={pixelId} onChange={(e) => setPixelId(e.target.value)}>
+                {assets.pixels.map((p) => <option key={p.id} value={p.id}>{p.name} — otimizar para leads</option>)}
+                <option value="">Sem pixel — otimizar para visitas na página</option>
+              </select>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
+            Ativar imediatamente (senão fica pausada para revisão)
+          </label>
+          <Button className="rounded-full" disabled={busy || !pageId}
+            onClick={() => onPublish({ page_id: pageId, pixel_id: pixelId, activate })}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Rocket className="w-4 h-4 mr-2" />}
+            {busy ? "Publicando no Meta..." : "Aprovar e publicar campanha"}
+          </Button>
+        </>
+      )}
+    </Card>
+  );
+}
+
 export default function Copilot() {
   const [meta, setMeta] = useState(null);
   const [list, setList] = useState([]);
@@ -151,7 +213,8 @@ export default function Copilot() {
   const generate = (step) => run(step, () => api.post(`/journey/${j.id}/generate/${step}`, {}, { timeout: 180000 }));
   const confirm = (step) => run(step, () => api.post(`/journey/${j.id}/confirm/${step}`));
   const saveStep = (step, data) => run(step, () => api.put(`/journey/${j.id}/deliverable/${step}`, { data }));
-  const approve = () => run("approve", () => api.post(`/journey/${j.id}/approve`));
+  const publish = (opts) => run("approve", () => api.post(`/journey/${j.id}/publish`,
+    { ...opts, landing_url: `${window.location.origin}/p/${j.landing_slug}` }, { timeout: 300000 }));
 
   if (!meta) return <div className="p-10 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>;
 
@@ -252,26 +315,26 @@ export default function Copilot() {
               busy={busy === s} onGenerate={generate} onConfirm={confirm} onSave={saveStep} />
           ))}
 
-          {/* Aprovação final */}
-          {current === "aprovacao" && (
-            <Card className="p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex-1">
-                <div className="text-sm font-semibold">Tudo pronto para ir ao ar</div>
-                <div className="text-xs text-muted-foreground">Copy, landing, criativos e estrutura aprovados.</div>
+          {/* Aprovação final + publicação no Meta */}
+          {current === "aprovacao" && !j.meta?.campaign_id && <PublishCard j={j} busy={busy === "approve"} onPublish={publish} />}
+          {j.meta?.campaign_id && (
+            <Card className="p-5 rounded-2xl text-sm space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="font-semibold flex-1">Campanha publicada no Meta</div>
+                <Badge className={`rounded-full ${j.meta.status === "ACTIVE" ? "bg-emerald-500/15 text-emerald-600" : "bg-muted text-muted-foreground"}`}>
+                  {j.meta.status === "ACTIVE" ? "Ativa" : "Pausada"}
+                </Badge>
               </div>
-              <Button className="rounded-full" onClick={approve} disabled={busy === "approve"}>
-                {busy === "approve" ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Rocket className="w-4 h-4 mr-2" />}
-                Aprovar campanha
-              </Button>
-            </Card>
-          )}
-          {j.status === "approved" && (
-            <Card className="p-5 rounded-2xl text-sm">
-              <div className="font-semibold mb-1">Campanha aprovada — monitoramento ativo</div>
               <div className="text-muted-foreground text-xs">
+                {j.meta.adset_ids?.length} conjunto(s) · {j.meta.ad_ids?.length} anúncio(s) · ID {j.meta.campaign_id}.
                 Acompanhe os leads em <a href="/app/leads" className="text-primary underline">Leads</a>.
                 {j.landing_slug && <> Página: <a href={`/p/${j.landing_slug}`} target="_blank" rel="noreferrer" className="text-primary underline">/p/{j.landing_slug}</a></>}
               </div>
+              <Button size="sm" variant={j.meta.status === "ACTIVE" ? "outline" : "default"} className="rounded-full" disabled={busy === "status"}
+                onClick={() => run("status", () => api.post(`/journey/${j.id}/meta-status`, { active: j.meta.status !== "ACTIVE" }))}>
+                {busy === "status" && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                {j.meta.status === "ACTIVE" ? "Pausar campanha" : "Ativar campanha"}
+              </Button>
             </Card>
           )}
         </>

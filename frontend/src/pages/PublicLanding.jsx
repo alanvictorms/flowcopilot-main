@@ -15,13 +15,20 @@ export default function PublicLanding() {
     api.get(`/public/lp/${slug}`).then(({ data }) => {
       setPage(data);
       document.title = data.landing?.headline || data.name || "";
+      if (/^\d+$/.test(data.pixel_id || "") && !window.fbq) {
+        /* eslint-disable */
+        !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+        /* eslint-enable */
+        window.fbq("init", data.pixel_id);
+        window.fbq("track", "PageView");
+      }
     }).catch(() => setError("Página não encontrada."));
   }, [slug]);
 
   const submit = async (e) => {
     e.preventDefault();
     setSending(true);
-    try { await api.post(`/public/lp/${slug}/lead`, form); setSent(true); }
+    try { await api.post(`/public/lp/${slug}/lead`, form); setSent(true); window.fbq?.("track", "Lead"); }
     catch (err) { setError(formatApiError(err.response?.data?.detail)); }
     finally { setSending(false); }
   };

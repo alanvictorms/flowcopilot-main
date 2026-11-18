@@ -574,6 +574,18 @@ async def suggest(jid: str, body: SuggestIn, user: dict = Depends(get_current_us
     return j
 
 
+@router.post("/journey/{jid}/complete")
+async def complete_journey(jid: str, user: dict = Depends(get_current_user),
+                           db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Finaliza a jornada (100%). O monitoramento continua disponível."""
+    j = await _get_journey(db, jid, user["id"])
+    if "aprovacao" not in j.get("done", []):
+        raise HTTPException(status_code=400, detail="Publique a campanha antes de concluir")
+    await db.journeys.update_one({"id": jid}, {"$set": {"status": "completed", "completed_at": _now()}})
+    j["status"] = "completed"
+    return await _advance(db, j, "monitoramento")
+
+
 class MetaStatusIn(BaseModel):
     active: bool
 

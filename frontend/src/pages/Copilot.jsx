@@ -605,7 +605,7 @@ export default function Copilot() {
       {list.map((x) => (
         <button key={x.id} onClick={() => open(x.id)}
           className={`shrink-0 group flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs transition-colors ${j?.id === x.id ? "border-primary/50 bg-primary/10 text-foreground font-medium" : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/60"}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${x.status === "approved" ? "bg-emerald-500" : "bg-primary/70"}`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${["approved", "completed"].includes(x.status) ? "bg-emerald-500" : "bg-primary/70"}`} />
           <span className="max-w-[160px] truncate">{x.name}</span>
           <Trash2 className="w-3 h-3 opacity-0 group-hover:opacity-60 hover:!opacity-100" onClick={(e) => { e.stopPropagation(); remove(x.id); }} />
         </button>
@@ -733,10 +733,15 @@ export default function Copilot() {
                 {busy === view ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
                 {view === "landing" ? "Aprovar, publicar e avançar" : "Aprovar e avançar"}
               </Button>
-            ) : view === "monitoramento" && j.meta?.campaign_id ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                <Check className="w-4 h-4" /> Campanha no ar — jornada concluída
+            ) : view === "monitoramento" && j.done.includes("monitoramento") ? (
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="w-4 h-4" /> Jornada concluída
               </span>
+            ) : view === "monitoramento" && j.done.includes("aprovacao") ? (
+              <Button className="rounded-full bg-emerald-600 hover:bg-emerald-500 text-white" disabled={busy === "complete"}
+                onClick={() => run("complete", () => api.post(`/journey/${j.id}/complete`))}>
+                {busy === "complete" ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />} Concluir
+              </Button>
             ) : (
               <span className="text-xs text-muted-foreground text-right">
                 {{ briefing: "Responda ao copiloto para concluir o briefing",

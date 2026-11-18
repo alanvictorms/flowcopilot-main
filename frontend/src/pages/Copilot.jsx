@@ -120,14 +120,21 @@ function PublishCard({ j, busy, onPublish }) {
   const [pageId, setPageId] = useState("");
   const [pixelId, setPixelId] = useState("");
   const [activate, setActivate] = useState(false);
+  const [manual, setManual] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true); setFailed("");
     api.get("/journey-meta-assets").then(({ data }) => {
       setAssets(data);
+      setManual(!data.pages?.length);
       setPageId(data.pages?.[0]?.id || "");
-      setPixelId(data.pixels?.[0]?.id || "");
-    }).catch((e) => setFailed(formatApiError(e.response?.data?.detail)));
-  }, [j.id]);
+      setPixelId((p) => p || data.pixels?.[0]?.id || "");
+    }).catch((e) => setFailed(formatApiError(e.response?.data?.detail)))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, [j.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const validPage = /^\d{5,25}$/.test(pageId.trim());
 
   return (
     <Card className="p-5 rounded-2xl space-y-4">
@@ -145,11 +152,23 @@ function PublishCard({ j, busy, onPublish }) {
         <>
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <div className="text-xs font-medium">Página do Facebook</div>
-              <select className={SEL} value={pageId} onChange={(e) => setPageId(e.target.value)}>
-                {assets.pages.length === 0 && <option value="">Nenhuma página encontrada</option>}
-                {assets.pages.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-medium">Página do Facebook</div>
+                {assets.pages.length > 0 && (
+                  <button type="button" className="text-[11px] text-primary hover:underline"
+                    onClick={() => { setManual(!manual); setPageId(manual ? assets.pages[0].id : ""); }}>
+                    {manual ? "Escolher da lista" : "Usar outro ID"}
+                  </button>
+                )}
+              </div>
+              {manual ? (
+                <input className={SEL} inputMode="numeric" placeholder="ID da página (ex.: 1234567890)"
+                  value={pageId} onChange={(e) => setPageId(e.target.value.replace(/\D/g, ""))} />
+              ) : (
+                <select className={SEL} value={pageId} onChange={(e) => setPageId(e.target.value)}>
+                  {assets.pages.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              )}
             </div>
             <div className="space-y-1">
               <div className="text-xs font-medium">Pixel (otimização)</div>
@@ -159,12 +178,35 @@ function PublishCard({ j, busy, onPublish }) {
               </select>
             </div>
           </div>
+          {assets.pages.length === 0 && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.07] p-4 text-xs space-y-3">
+              <div>
+                <div className="font-semibold text-sm text-foreground">Nenhuma página encontrada na sua conta</div>
+                <div className="mt-1 text-muted-foreground leading-relaxed">
+                  O Meta exige uma Página do Facebook para veicular anúncios (é ela que aparece como anunciante).
+                  Crie uma página gratuita, ou cole acima o ID de uma página que você já administra
+                  (Página → Sobre → Transparência da página, ou na URL do Gerenciador de Negócios).
+                  Se a página for de um Gerenciador de Negócios, verifique se o token tem a permissão <b>pages_show_list</b>.
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <a href="https://www.facebook.com/pages/create" target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary text-primary-foreground px-3.5 py-1.5 font-medium">
+                  <Plus className="w-3.5 h-3.5" /> Criar página no Facebook
+                </a>
+                <button type="button" onClick={load} disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-1.5 font-medium">
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Já criei, atualizar lista
+                </button>
+              </div>
+            </div>
+          )}
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
             Ativar imediatamente (senão fica pausada para revisão)
           </label>
-          <Button className="rounded-full" disabled={busy || !pageId}
-            onClick={() => onPublish({ page_id: pageId, pixel_id: pixelId, activate })}>
+          <Button className="rounded-full" disabled={busy || !validPage}
+            onClick={() => onPublish({ page_id: pageId.trim(), pixel_id: pixelId, activate })}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Rocket className="w-4 h-4 mr-2" />}
             {busy ? "Publicando no Meta..." : "Aprovar e publicar campanha"}
           </Button>

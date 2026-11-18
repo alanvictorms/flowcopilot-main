@@ -306,16 +306,24 @@ def _ages(text: str) -> tuple[int, int]:
 async def meta_assets(user: dict = Depends(get_current_user), db: AsyncIOMotorDatabase = Depends(get_db)):
     """Páginas e pixels da conta conectada, para o passo de publicação."""
     client = await get_meta_client(user, db)
-    try:
-        pages = await client._request("GET", "/me/accounts", params={"fields": "id,name", "limit": 100})
-        pixels = await client._request("GET", f"/{client.ad_account_id}/adspixels", params={"fields": "id,name", "limit": 50})
-    except MetaAPIError as e:
-        raise _meta_err(e)
-    return {"pages": pages.get("data", []), "pixels": pixels.get("data", [])}
+
+    async def fetch(path, fields):
+        try:
+            return (await client._request("GET", path, params={"fields": fields, "limit": 100})).get("data", [])
+        except MetaAPIError:
+            return []
+
+    # Páginas do perfil + páginas que a conta de anúncios pode promover (inclui as do
+    # Gerenciador de Negócios, que não aparecem em /me/accounts).
+    pages = {}
+    for p in await fetch(f"/{client.ad_account_id}/promote_pages", "id,name") + await fetch("/me/accounts", "id,name"):
+        pages.setdefault(p["id"], p)
+    pixels = await fetch(f"/{client.ad_account_id}/adspixels", "id,name")
+    return {"pages": list(pages.values()), "pixels": pixels}
 
 
 class PublishIn(BaseModel):
-    page_id: str = Field(min_length=1)
+    page_id: str = Field(pattern=r"^\d{5,25}$")
     pixel_id: str = ""
     landing_url: str = Field(min_length=8)
     activate: bool = False

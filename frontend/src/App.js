@@ -72,6 +72,8 @@ import Onboarding from "@/pages/Onboarding";
 import Copilot from "@/pages/Copilot";
 import Leads from "@/pages/Leads";
 import PublicLanding from "@/pages/PublicLanding";
+import AdminTenants from "@/pages/AdminTenants";
+import WhiteLabel from "@/pages/WhiteLabel";
 
 function Protected({ children }) {
   const { user } = useAuth();
@@ -155,6 +157,7 @@ export default function App() {
               <Route index element={<Navigate to="copilot" replace />} />
               <Route path="copilot" element={<Copilot />} />
               <Route path="leads" element={<Leads />} />
+              <Route path="white-label" element={<WhiteLabel />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="campaigns" element={<Campaigns />} />
               <Route path="audit" element={<Audit />} />
@@ -196,6 +199,7 @@ export default function App() {
                 <Route path="llm-usage" element={<AdminLLMUsage />} />
                 <Route path="page-agent" element={<AdminPageAgent />} />
                 <Route path="llm" element={<AdminLLMConfig />} />
+                <Route path="tenants" element={<AdminTenants />} />
               </Route>
               <Route path="funnel" element={<Funnel />} />
               <Route path="agency" element={<AdminOnly><Agency /></AdminOnly>} />

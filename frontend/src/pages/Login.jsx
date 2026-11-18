@@ -5,6 +5,7 @@ import { Loader2, Mail, Lock, Eye, EyeOff, Github } from "lucide-react";
 
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBrand } from "@/lib/brand";
 import { GLSLHills } from "@/components/GLSLHills";
 
 function GoogleIcon({ className }) {
@@ -16,6 +17,7 @@ function GoogleIcon({ className }) {
 }
 
 export default function Login() {
+  const brand = useBrand();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -67,8 +69,8 @@ export default function Login() {
 
       {/* Logo no canto */}
       <div className="absolute top-6 left-6 z-20 flex items-center gap-2.5">
-        <img src="/flowpilot-icon.png" alt="FlowPilot" className="w-7 h-7" />
-        <span className="text-sm font-semibold tracking-tight">FlowPilot</span>
+        <img src={brand.logo} alt={brand.name} className="w-7 h-7 object-contain" />
+        <span className="text-sm font-semibold tracking-tight">{brand.name}</span>
       </div>
 
       {/* Card central */}

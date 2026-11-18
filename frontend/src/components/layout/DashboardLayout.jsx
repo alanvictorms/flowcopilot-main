@@ -6,7 +6,7 @@ import {
   FlaskConical, Brain, ScrollText, Radar, TrendingUp, Stethoscope,
   TestTube2, UserCog, Moon, Sun, User, Inbox,
   Recycle, Radio, Users, Target, UserCheck, Gauge, CalendarDays,
-  CreditCard, Coins, RefreshCw, Compass, Contact,
+  CreditCard, Coins, RefreshCw, Compass, Contact, Building2,
   ChevronDown, ChevronRight,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
@@ -23,6 +23,7 @@ import HelpTooltip from "@/components/HelpTooltip";
 import FloatingChat from "@/components/FloatingChat";
 import Flag from "@/components/Flag";
 import PageAgentLoader from "@/components/PageAgentLoader";
+import { useBrand, loadTenantBrand } from "@/lib/brand";
 
 // ── Navegação enxuta (8 grupos) ───────────────────────────────────
 // Os módulos ainda não fundidos ficam em "Avançado" (recolhível). Nada foi
@@ -49,6 +50,10 @@ const ACCOUNT_NAV = [
   { to: "/app/profile", i18nKey: "nav.profile", icon: User, testid: "nav-profile" },
   { to: "/app/plans", i18nKey: "nav.plans", icon: CreditCard, testid: "nav-plans" },
   { to: "/app/wallet", i18nKey: "nav.wallet", icon: Coins, testid: "nav-wallet" },
+];
+
+const OWNER_NAV = [
+  { to: "/app/white-label", i18nKey: "nav.white-label", icon: Building2, testid: "nav-white-label" },
 ];
 
 const ADMIN_NAV = [
@@ -90,6 +95,8 @@ function getHelpKey(pathname) {
 
 export default function DashboardLayout() {
   const { user, signout } = useAuth();
+  const brand = useBrand();
+  useEffect(() => { loadTenantBrand(user?.tenant_id); }, [user?.tenant_id]);
   const { theme, toggleTheme } = useTheme();
   const { lang, setLang, t } = useLanguage();
   const navigate = useNavigate();
@@ -117,7 +124,7 @@ export default function DashboardLayout() {
   useEffect(() => { if (advActive) setAdvOpen(true); }, [advActive]);
 
   const isDashboard = location.pathname === "/app/dashboard" || location.pathname === "/app";
-  const allNav = [...HOME_NAV, ...OPS_NAV, ...AGENT_NAV, ...ACCOUNT_NAV, ...ADMIN_NAV, ...ADVANCED_NAV];
+  const allNav = [...HOME_NAV, ...OPS_NAV, ...AGENT_NAV, ...ACCOUNT_NAV, ...OWNER_NAV, ...ADMIN_NAV, ...ADVANCED_NAV];
   const activeItem = allNav.find((n) => location.pathname.startsWith(n.to));
   const currentLang = LANGS.find((l) => l.code === lang) || LANGS[0];
   const initials = (user?.name || user?.email || "U").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
@@ -152,16 +159,16 @@ export default function DashboardLayout() {
     <>
       {collapsed ? (
         <div className="py-3 flex flex-col items-center gap-2 shrink-0">
-          <img src="/flowpilot-icon.png" alt="FlowPilot" className="w-8 h-8 shrink-0" />
+          <img src={brand.logo} alt={brand.name} className="w-8 h-8 shrink-0 object-contain" />
           <button onClick={() => setCollapsed(false)} className="text-white/40 hover:text-white/80 p-1 rounded-md" data-testid="sidebar-expand-btn">
             <PanelLeft className="w-4 h-4" />
           </button>
         </div>
       ) : (
         <div className="h-14 flex items-center gap-3 px-4 shrink-0 overflow-hidden">
-          <img src="/flowpilot-icon.png" alt="FlowPilot" className="w-8 h-8 shrink-0" />
+          <img src={brand.logo} alt={brand.name} className="w-8 h-8 shrink-0 object-contain" />
           <div className="flex-1 min-w-0 flex items-center justify-between">
-            <div className="text-white font-semibold text-sm whitespace-nowrap">FlowPilot</div>
+            <div className="text-white font-semibold text-sm whitespace-nowrap truncate">{brand.name}</div>
             <button onClick={() => setCollapsed(true)} className="text-white/40 hover:text-white/80 p-1 rounded-md shrink-0" data-testid="sidebar-collapse-btn">
               <PanelLeftClose className="w-4 h-4" />
             </button>
@@ -181,6 +188,7 @@ export default function DashboardLayout() {
         <NavGroup titleKey="group.ops" items={OPS_NAV} />
         <NavGroup titleKey="group.agent" items={AGENT_NAV} />
         <NavGroup titleKey="group.account" items={ACCOUNT_NAV} />
+        {user?.tenant_role === "owner" && <NavGroup titleKey="group.agency" items={OWNER_NAV} />}
         {user?.is_admin && <NavGroup titleKey="group.admin" items={ADMIN_NAV} />}
         {collapsed ? (
           <NavGroup titleKey="group.advanced" items={ADVANCED_NAV} />
@@ -250,7 +258,7 @@ export default function DashboardLayout() {
               ) : (
                 <div className="flex items-center gap-2">
                   <h1 className="text-lg font-semibold tracking-tight truncate" data-testid="page-title">
-                    {activeItem ? t(activeItem.i18nKey) : "FlowPilot"}
+                    {activeItem ? t(activeItem.i18nKey) : brand.name}
                   </h1>
                   <HelpTooltip text={helpText !== helpKey ? helpText : undefined} />
                 </div>

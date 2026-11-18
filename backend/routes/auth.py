@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, EmailStr, Field
 
@@ -15,6 +15,7 @@ from services.security import (
     get_current_user,
 )
 from services.credits import add_credits
+from routes.tenants import tenant_for_host, request_host
 
 # Créditos de boas-vindas para novos usuários poderem testar a plataforma.
 WELCOME_CREDITS = 100
@@ -39,6 +40,8 @@ class UserOut(BaseModel):
     email: str
     created_at: str
     is_admin: bool = False
+    tenant_id: str | None = None
+    tenant_role: str | None = None
 
 
 class AuthResponse(BaseModel):
@@ -60,11 +63,13 @@ def _serialize(u: dict) -> dict:
         "email": u["email"],
         "created_at": u["created_at"],
         "is_admin": _is_admin(u["email"]),
+        "tenant_id": u.get("tenant_id"),
+        "tenant_role": u.get("tenant_role"),
     }
 
 
 @router.post("/register", response_model=AuthResponse)
-async def register(body: RegisterIn, db: AsyncIOMotorDatabase = Depends(get_db)):
+async def register(body: RegisterIn, request: Request, db: AsyncIOMotorDatabase = Depends(get_db)):
     email = body.email.lower().strip()
     existing = await db.users.find_one({"email": email})
     if existing:
@@ -77,6 +82,9 @@ async def register(body: RegisterIn, db: AsyncIOMotorDatabase = Depends(get_db))
         "password_hash": hash_password(body.password),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    tenant = await tenant_for_host(db, request_host(request))  # cadastro no domínio da agência
+    if tenant:
+        doc.update(tenant_id=tenant["id"], tenant_role="client")
     await db.users.insert_one(doc)
     if WELCOME_CREDITS > 0:
         await add_credits(db, user_id, WELCOME_CREDITS, "welcome_bonus",

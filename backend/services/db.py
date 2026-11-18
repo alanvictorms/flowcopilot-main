@@ -12,6 +12,8 @@ async def init_db_indexes(db: AsyncIOMotorDatabase):
     await db.users.create_index("email", unique=True)
     await db.meta_settings.create_index("user_id", unique=True)
     await db.journeys.create_index("landing_slug", sparse=True)
+    await db.tenants.create_index("domain")
+    await db.users.create_index("tenant_id", sparse=True)
     await db.leads.create_index([("user_id", 1), ("created_at", -1)])
     await db.campaigns_cache.create_index([("user_id", 1), ("id", 1)], unique=True)
     await db.audits.create_index([("user_id", 1), ("created_at", -1)])

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 
 const ADMIN_SECTIONS = [
   { to: "/app/admin/users", icon: Users, label: "Usuários" },
+  { to: "/app/admin/tenants", icon: Building2, label: "Agências" },
   { to: "/app/admin/plans", icon: CreditCard, label: "Planos" },
   { to: "/app/admin/resources", icon: Coins, label: "Recursos" },
   { to: "/app/admin/referrals", icon: Link2, label: "Indicações" },

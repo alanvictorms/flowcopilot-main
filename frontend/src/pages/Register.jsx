@@ -5,9 +5,11 @@ import { Loader2, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBrand } from "@/lib/brand";
 import { GLSLHills } from "@/components/GLSLHills";
 
 export default function Register() {
+  const brand = useBrand();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,8 +44,8 @@ export default function Register() {
       <div className="fixed inset-0 z-[1] pointer-events-none bg-gradient-to-b from-transparent via-transparent to-[#09090b]/80" />
 
       <div className="absolute top-6 left-6 z-20 flex items-center gap-2.5">
-        <img src="/flowpilot-icon.png" alt="FlowPilot" className="w-7 h-7" />
-        <span className="text-sm font-semibold tracking-tight">FlowPilot</span>
+        <img src={brand.logo} alt={brand.name} className="w-7 h-7 object-contain" />
+        <span className="text-sm font-semibold tracking-tight">{brand.name}</span>
       </div>
 
       <div className="relative z-10 min-h-screen flex items-center justify-center p-6">

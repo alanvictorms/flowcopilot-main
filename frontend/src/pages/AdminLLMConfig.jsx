@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const SEL = "w-full h-9 rounded-md border border-input bg-background px-3 text-sm";
+
 export default function AdminLLMConfig() {
   const [cfg, setCfg] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -25,7 +27,8 @@ export default function AdminLLMConfig() {
   const save = async () => {
     setSaving(true);
     try {
-      await api.post("/admin/llm-config", cfg);
+      const { providers: _p, ...body } = cfg;
+      await api.post("/admin/llm-config", body);
       toast.success("Configuração de modelos salva e aplicada.");
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail));
@@ -34,6 +37,30 @@ export default function AdminLLMConfig() {
 
   if (!cfg) return <div className="text-sm text-muted-foreground">Carregando…</div>;
   const set = (patch) => setCfg((c) => ({ ...c, ...patch }));
+  const providers = cfg.providers || {};
+  const prov = providers[cfg.provider] || {};
+  const isCustom = !prov.base_url;
+
+  // Select com os modelos do provedor + "Outro…" para digitar qualquer nome.
+  const modelSelect = ({ label, field, options = [], placeholder }) => {
+    const value = cfg[field] || "";
+    const other = !options.includes(value);
+    return (
+      <div className="space-y-1.5">
+        <Label>{label}</Label>
+        {options.length > 0 && (
+          <select className={SEL} value={other ? "__other" : value}
+            onChange={(e) => set({ [field]: e.target.value === "__other" ? "" : e.target.value })}>
+            {options.map((m) => <option key={m} value={m}>{m}</option>)}
+            <option value="__other">Outro…</option>
+          </select>
+        )}
+        {(other || options.length === 0) && (
+          <Input value={value} onChange={(e) => set({ [field]: e.target.value })} placeholder={placeholder} />
+        )}
+      </div>
+    );
+  };
 
   const ModeCard = ({ value, icon: Icon, title, desc }) => {
     const active = cfg.mode === value;
@@ -62,7 +89,7 @@ export default function AdminLLMConfig() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <ModeCard value="emergent" icon={Server} title="LLM interna (Emergent)" desc="Padrão. Usa a IA interna, exatamente como o sistema funcionava antes. Sem configuração." />
-        <ModeCard value="custom" icon={KeyRound} title="Credenciais próprias" desc="Endpoint compatível com a API da OpenAI (OpenAI, OpenRouter, Groq, DeepSeek, Ollama…)." />
+        <ModeCard value="custom" icon={KeyRound} title="Credenciais próprias" desc="Sua chave: Google Gemini, OpenAI, OpenRouter ou outro endpoint compatível." />
       </div>
 
       {cfg.mode === "emergent" ? (
@@ -77,26 +104,34 @@ export default function AdminLLMConfig() {
         </Card>
       ) : (
         <Card className="p-6 rounded-2xl space-y-4">
-          <div className="text-sm font-semibold">Endpoint compatível com OpenAI</div>
           <div className="space-y-1.5">
-            <Label>Base URL</Label>
-            <Input value={cfg.base_url || ""} onChange={(e) => set({ base_url: e.target.value })} placeholder="https://api.openai.com/v1" />
+            <Label>Provedor</Label>
+            <select className={SEL} value={cfg.provider || "custom"}
+              onChange={(e) => {
+                const p = providers[e.target.value] || {};
+                set({ provider: e.target.value, custom_model: p.text_models?.[0] || cfg.custom_model, custom_image_model: p.image_models?.[0] || cfg.custom_image_model });
+              }}>
+              {Object.entries(providers).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}
+            </select>
           </div>
-          <div className="space-y-1.5">
-            <Label>Modelo de texto</Label>
-            <Input value={cfg.custom_model || ""} onChange={(e) => set({ custom_model: e.target.value })} placeholder="gpt-4o-mini" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Modelo de imagem</Label>
-            <Input value={cfg.custom_image_model || ""} onChange={(e) => set({ custom_image_model: e.target.value })} placeholder="gpt-image-1" />
-          </div>
+          {isCustom && (
+            <div className="space-y-1.5">
+              <Label>Base URL</Label>
+              <Input value={cfg.base_url || ""} onChange={(e) => set({ base_url: e.target.value })} placeholder="https://api.openai.com/v1" />
+            </div>
+          )}
+          {modelSelect({ label: "Modelo de texto", field: "custom_model", options: prov.text_models, placeholder: "gpt-4o-mini" })}
+          {modelSelect({ label: "Modelo de imagem", field: "custom_image_model", options: prov.image_models, placeholder: "gpt-image-1" })}
           <div className="space-y-1.5">
             <Label>API Key</Label>
-            <Input type="password" value={cfg.api_key || ""} onChange={(e) => set({ api_key: e.target.value })} placeholder="sk-…" />
+            <Input type="password" value={cfg.api_key || ""} onChange={(e) => set({ api_key: e.target.value })}
+              placeholder={cfg.provider === "gemini" ? "AIza…" : "sk-…"} />
           </div>
           <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
             <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            Exemplos: OpenAI (api.openai.com/v1, imagem <span className="font-mono">gpt-image-1</span> ou <span className="font-mono">dall-e-3</span>), OpenRouter (openrouter.ai/api/v1 — acesso a Claude, Gemini e mais), Groq, DeepSeek, Ollama local. Quando ativado, <b>tudo</b> (texto e imagem) usa estas credenciais.
+            {cfg.provider === "gemini"
+              ? <span>Gere a chave em <b>aistudio.google.com/apikey</b>. Texto e imagem passam a usar o Gemini.</span>
+              : <span>Quando ativado, <b>tudo</b> (texto e imagem) usa estas credenciais. Em "Outro", informe qualquer endpoint compatível com OpenAI (Groq, DeepSeek, Ollama…).</span>}
           </div>
         </Card>
       )}

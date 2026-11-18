@@ -362,6 +362,7 @@ async def audit_log(
 class LLMConfigIn(BaseModel):
     mode: str = "emergent"                 # emergent (padrão, sem seleção) | custom
     base_url: str = "https://api.openai.com/v1"
+    provider: str = "custom"
     api_key: str = ""
     custom_model: str = "gpt-4o-mini"
     custom_image_model: str = "gpt-image-1"
@@ -369,7 +370,7 @@ class LLMConfigIn(BaseModel):
 
 @router.get("/llm-config")
 async def get_llm_config(admin: dict = Depends(require_admin), db: AsyncIOMotorDatabase = Depends(get_db)):
-    return llm.get_config()
+    return {**llm.get_config(), "providers": llm.PROVIDERS}
 
 
 @router.post("/llm-config")

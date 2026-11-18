@@ -724,9 +724,27 @@ export default function Copilot() {
             <Button variant="ghost" className="rounded-full" disabled={idx === 0} onClick={() => setView(phases[idx - 1].key)}>
               <ChevronLeft className="w-4 h-4 mr-1" /> Voltar
             </Button>
-            <Button variant={canNext ? "default" : "outline"} className="rounded-full" disabled={!canNext} onClick={() => setView(phases[idx + 1].key)}>
-              {canNext ? "Próxima etapa" : "Conclua esta etapa"} <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
+            {canNext ? (
+              <Button className="rounded-full" onClick={() => setView(phases[idx + 1].key)}>
+                Próxima etapa <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            ) : GEN_STEPS.includes(view) && j.deliverables?.[view] ? (
+              <Button className="rounded-full" disabled={busy === view} onClick={() => confirm(view)}>
+                {busy === view ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
+                {view === "landing" ? "Aprovar, publicar e avançar" : "Aprovar e avançar"}
+              </Button>
+            ) : view === "monitoramento" && j.meta?.campaign_id ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="w-4 h-4" /> Campanha no ar — jornada concluída
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground text-right">
+                {{ briefing: "Responda ao copiloto para concluir o briefing",
+                   funil: "Escolha um modelo de funil acima",
+                   aprovacao: "Clique em “Aprovar e publicar campanha” acima",
+                   monitoramento: "Publique a campanha para concluir" }[view] || "Gere o conteúdo acima para avançar"}
+              </span>
+            )}
           </div>
         </div>
       </div>

@@ -144,7 +144,7 @@ export default function DashboardLayout() {
               `group flex items-center gap-3 rounded-xl py-2 text-sm transition-colors ${
                 collapsed ? "justify-center px-0" : "px-3"
               } ${
-                isActive ? "bg-primary text-primary-foreground font-medium" : "text-white/60 hover:bg-white/5 hover:text-white"
+                isActive ? "nav-active font-medium" : "text-white/60 hover:bg-white/5 hover:text-white"
               }`
             }>
             <item.icon className="w-4 h-4 shrink-0" />
@@ -208,7 +208,7 @@ export default function DashboardLayout() {
                   <NavLink key={item.to} to={item.to} onClick={() => setMobileOpen(false)} data-testid={item.testid}
                     className={({ isActive }) =>
                       `group flex items-center gap-3 rounded-xl py-2 px-3 text-sm transition-colors ${
-                        isActive ? "bg-primary text-primary-foreground font-medium" : "text-white/60 hover:bg-white/5 hover:text-white"
+                        isActive ? "nav-active font-medium" : "text-white/60 hover:bg-white/5 hover:text-white"
                       }`
                     }>
                     <item.icon className="w-4 h-4 shrink-0" />
@@ -224,10 +224,10 @@ export default function DashboardLayout() {
   );
 
   return (
-    <div className="h-screen flex overflow-hidden" style={{ backgroundColor: "hsl(var(--sidebar-bg))" }}>
+    <div className="app-shell h-[100dvh] flex overflow-hidden">
       {mobileOpen && <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setMobileOpen(false)} />}
 
-      <aside className={`hidden md:flex flex-col shrink-0 h-screen overflow-hidden transition-[width] duration-200 ${collapsed ? "w-[68px]" : "w-[300px]"}`} style={{ backgroundColor: "hsl(var(--sidebar-bg))" }} data-testid="app-sidebar">
+      <aside className={`hidden md:flex flex-col shrink-0 h-screen overflow-hidden transition-[width] duration-200 ${collapsed ? "w-[68px]" : "w-[260px]"}`} data-testid="app-sidebar">
         {sidebarContent}
       </aside>
 
@@ -235,9 +235,9 @@ export default function DashboardLayout() {
         {sidebarContent}
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col h-screen p-2 pl-0">
-        <div className="flex-1 bg-background rounded-4xl overflow-hidden flex flex-col shadow-sm">
-          <header className="h-14 flex items-center px-4 md:px-6 gap-3 shrink-0 border-b border-border/30">
+      <div className="flex-1 min-w-0 flex flex-col h-[100dvh] md:p-2 md:pl-0">
+        <div className="app-panel flex-1 md:rounded-[2rem] overflow-hidden flex flex-col shadow-2xl">
+          <header className="h-14 flex items-center px-3 md:px-6 gap-2 md:gap-3 shrink-0 border-b border-border/30">
             <button onClick={() => setMobileOpen(!mobileOpen)} className="md:hidden w-8 h-8 rounded-lg bg-muted hover:bg-accent flex items-center justify-center" data-testid="mobile-menu-btn">
               <PanelLeft className="w-4 h-4" />
             </button>
@@ -267,7 +267,7 @@ export default function DashboardLayout() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="h-8 px-2 rounded-lg bg-muted hover:bg-accent flex items-center justify-center" data-testid="lang-btn" title={currentLang.label}>
+                <button className="hidden sm:flex h-8 px-2 rounded-lg bg-muted hover:bg-accent items-center justify-center" data-testid="lang-btn" title={currentLang.label}>
                   <Flag code={currentLang.code} className="w-5 h-auto" />
                 </button>
               </DropdownMenuTrigger>
@@ -289,7 +289,7 @@ export default function DashboardLayout() {
             </button>
             <button
               onClick={() => window.dispatchEvent(new CustomEvent("flowpilot:open-chat"))}
-              className="w-8 h-8 rounded-lg bg-muted hover:bg-accent flex items-center justify-center"
+              className="hidden sm:flex w-8 h-8 rounded-lg bg-muted hover:bg-accent items-center justify-center"
               data-testid="header-chat-btn"
               title={t("nav.chat")}
             >
@@ -354,9 +354,21 @@ export default function DashboardLayout() {
             </DropdownMenu>
           </header>
 
-          <main className="flex-1 px-4 md:px-6 pb-6 pt-4 overflow-y-auto scrollbar-thin">
+          <main className="flex-1 px-3 md:px-6 pb-24 md:pb-6 pt-4 overflow-y-auto scrollbar-thin">
             <Outlet />
           </main>
+          {/* Mobile-first: barra inferior com os módulos principais */}
+          <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 app-panel border-t border-white/10 pb-[env(safe-area-inset-bottom)]" data-testid="mobile-tabbar">
+            <div className="grid grid-cols-5">
+              {HOME_NAV.map((item) => (
+                <NavLink key={item.to} to={item.to}
+                  className={({ isActive }) => `flex flex-col items-center gap-0.5 py-2 text-[10px] ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>
+                  <item.icon className="w-5 h-5" />
+                  <span className="truncate max-w-full px-1">{t(item.i18nKey)}</span>
+                </NavLink>
+              ))}
+            </div>
+          </nav>
         </div>
       </div>
 
